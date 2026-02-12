@@ -4,79 +4,154 @@
 
 <h1 align="center">CloudBroker</h1>
 
-Production-ready Python backend for a **compute pricing marketplace**: FastAPI, PostgreSQL, SQLAlchemy 2.x, Alembic, Pydantic, Docker.
+<p align="center">
+  Multi-cloud compute pricing marketplace &mdash; ingests instance data from 8+ providers, normalises prices to EUR, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints.
+</p>
 
-## Tech stack
+## Architecture
 
-- **FastAPI** – API framework
-- **PostgreSQL** – Database
-- **SQLAlchemy 2.x** – ORM (async via `asyncpg`)
-- **Alembic** – Migrations
-- **Pydantic** – Settings and validation
-- **Docker** & **docker-compose** – Run app and DB locally
+```mermaid
+graph TB
+    subgraph Ingestion ["Ingestion Pipeline"]
+        CLI["make ingest-*<br/>(CLI)"]
+        CON["Connectors<br/>GCP · AWS · Azure<br/>Hetzner · Scaleway · OVH<br/>DigitalOcean · Aruba"]
+        SVC["Ingestion Service<br/>(upsert + FX)"]
+        CLI --> CON --> SVC
+    end
 
-## Quick start (Docker)
+    subgraph Core ["CloudBroker Core"]
+        DB[("PostgreSQL<br/>Providers · Regions<br/>InstanceTypes · Prices<br/>FxRates")]
+        REC["Recommendation<br/>Engine<br/>(scoring + ranking)"]
+        ANA["Price Analytics<br/>(changes + trends)"]
+    end
+
+    subgraph API ["FastAPI  · /api"]
+        R1["/recommendations"]
+        R2["/providers · /regions<br/>/instance-types · /prices"]
+        R3["/price-analytics<br/>/changes · /trends"]
+        R4["/metrics (Prometheus)"]
+    end
+
+    SVC --> DB
+    DB --> REC
+    DB --> ANA
+    REC --> R1
+    DB --> R2
+    ANA --> R3
+
+    CB["Cloudburst Autoscaler<br/>(Kubernetes controller)"] -->|POST /api/recommendations| R1
+
+    style Ingestion fill:#e8f4f8,stroke:#2196F3,color:#000
+    style Core fill:#fff3e0,stroke:#FF9800,color:#000
+    style API fill:#e8f5e9,stroke:#4CAF50,color:#000
+    style CB fill:#f3e5f5,stroke:#9C27B0,color:#000
+```
+
+### How it works
+
+1. **Ingest** &mdash; CLI connectors pull instance types and hourly prices from each provider's API, convert to EUR, and upsert into PostgreSQL.
+2. **Recommend** &mdash; Given constraints (CPU, RAM, arch, region, price ceiling, allowed providers), the engine filters candidates, scores them by price efficiency and resource fit, and returns a ranked list.
+3. **Analyse** &mdash; Price-analytics endpoints detect changes and trends across the stored price history.
+4. **Integrate** &mdash; [Cloudburst Autoscaler](https://github.com/braghettos/cloudburst-autoscaler) calls `POST /api/recommendations` to decide which VM to provision when Kubernetes pods are unschedulable.
+
+## Features
+
+- **8 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean, Aruba
+- **EUR-normalised pricing** &mdash; all prices converted via FX rates
+- **Dual scoring modes** &mdash; legacy (price + fit) or multi-criteria (cost, performance, reliability)
+- **Transparent ranking** &mdash; every recommendation includes an `explain` block
+- **Price analytics** &mdash; change detection and trend analysis over historical data
+- **Prometheus metrics** &mdash; `/api/metrics` endpoint
+- **Idempotent ingestion** &mdash; safe to re-run at any time
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API framework | FastAPI |
+| ORM | SQLAlchemy 2.x (async via asyncpg) |
+| Database | PostgreSQL 16 |
+| Migrations | Alembic |
+| Validation | Pydantic v2 |
+| Rate limiting | SlowAPI |
+| Metrics | prometheus-client |
+| Logging | structlog |
+| Containerisation | Docker + docker-compose |
+| CI | GitHub Actions (lint, test, Docker build + push to GHCR) |
+
+## Quick Start
+
+### Docker (recommended)
 
 ```bash
-# Clone and enter project
 cd cloudbroker
-
-# Copy env (optional; defaults work with compose)
 cp .env.example .env
 
 # Start API + PostgreSQL
 make up
 
-# Run migrations (from host; requires venv and .env pointing at localhost)
+# Run migrations + seed (3 providers, 5 regions, 20 instance types, pricing)
 make migrate
-
-# Seed database (3 providers, 5 regions, 20 instance types, pricing)
 make seed
 
 # API is at http://localhost:8000
+# Swagger UI at http://localhost:8000/docs
 ```
 
-If you don't have a local Python env, run migrate and seed inside the API container:
+If you don't have a local Python env, run inside the container:
 
 ```bash
 docker compose exec api alembic upgrade head
 docker compose exec api python scripts/seed.py
 ```
 
-Stop the stack:
+### Local
 
 ```bash
-make down
+python3 -m venv .venv && source .venv/bin/activate
+make install
+cp .env.example .env
+# Start PostgreSQL (e.g. docker compose up -d db)
+make migrate && make seed
+make dev
 ```
 
-## Quick start (local)
+## Project Structure
 
-1. **Virtualenv and install**
+```
+app/
+  main.py              # FastAPI application
+  api/                 # Route handlers
+  core/                # Config, database, logging, security, middleware
+  models/              # SQLAlchemy models
+  schemas/             # Pydantic schemas
+  services/            # Business logic (recommendations, ingestion, analytics)
+apps/
+  ingestor/            # CLI for provider data ingestion
+connectors/            # Provider-specific pricing connectors
+migrations/            # Alembic migrations
+scripts/               # Seed and utility scripts
+tests/                 # Pytest test suite
+docs/                  # Additional documentation
+docker-compose.yml
+Makefile
+```
 
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate   # Windows: .venv\Scripts\activate
-   make install
-   ```
+## Configuration
 
-2. **Env and database**
+### Environment Variables
 
-   ```bash
-   cp .env.example .env
-   # Start PostgreSQL (e.g. local or Docker: docker compose up -d db)
-   make migrate
-   make seed
-   ```
+See `.env.example`. Key variables:
 
-3. **Run API**
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Async URL (`postgresql+asyncpg://...`) |
+| `DATABASE_URL_SYNC` | Yes | Sync URL for Alembic (`postgresql://...`) |
+| `APP_ENV` | No | `development` / `production` (default: `development`) |
+| `API_KEY` | No | API key for auth (bypassed in dev mode) |
+| `DEBUG` | No | Enable debug mode |
 
-   ```bash
-   make dev
-   ```
-
-4. Open **http://localhost:8000** and **http://localhost:8000/docs**.
-
-## Makefile commands
+## Makefile Commands
 
 Run `make help` for the full list. Key targets:
 
@@ -88,54 +163,34 @@ Run `make help` for the full list. Key targets:
 | `make seed` | Seed DB with providers, regions, instance types |
 | `make install` | Install all dependencies (dev + ingest) |
 | `make dev` | Run API with hot-reload |
-| `make run` | Run API (production mode) |
 | `make test` | Run pytest |
 | `make lint` | Run ruff linter |
 | `make ingest-all` | Ingest pricing from all providers |
 | `make ingest-gcp` | Ingest GCP Billing Catalog |
 | `make ingest-aws` | Ingest AWS EC2 pricing |
 | `make ingest-scaleway` | Ingest Scaleway pricing |
+| `make ingest-hetzner` | Ingest Hetzner pricing |
 | `make clean` | Remove caches and build artifacts |
 
-## cURL examples
-
-Base URL: `http://localhost:8000` (use `http://localhost:8000/api` for list endpoints).
-
-**Health**
+## API Examples
 
 ```bash
+# Health check
 curl -s http://localhost:8000/health
-# {"status":"ok"}
-```
 
-**List providers (paginated)**
-
-```bash
+# List providers
 curl -s "http://localhost:8000/api/providers?limit=5"
-```
 
-**List regions (filter by provider)**
-
-```bash
+# List regions (filter by provider)
 curl -s "http://localhost:8000/api/regions?provider=aws"
-curl -s "http://localhost:8000/api/regions?provider=gcp&limit=10"
-```
 
-**List instance types (filter by min specs and arch)**
-
-```bash
+# List instance types (filter by specs)
 curl -s "http://localhost:8000/api/instance-types?min_vcpu=2&min_ram_gb=4&arch=x86_64&limit=10"
-```
 
-**List prices (filter by provider and region)**
-
-```bash
+# List prices (filter by provider and region)
 curl -s "http://localhost:8000/api/prices?provider=aws&region=eu-west-1&limit=5"
-```
 
-**Recommendations (POST)**
-
-```bash
+# Get recommendations
 curl -s -X POST http://localhost:8000/api/recommendations \
   -H "Content-Type: application/json" \
   -d '{
@@ -148,47 +203,15 @@ curl -s -X POST http://localhost:8000/api/recommendations \
   }'
 ```
 
-## Project structure
-
-```
-app/
-  main.py              # FastAPI app
-  api/                 # Routes (providers, regions, instance-types, prices, recommendations, metrics)
-  core/                # Config, database, logging, security, middleware
-  models/              # SQLAlchemy models
-  schemas/             # Pydantic schemas
-  services/            # Business logic (recommendations, ingestion, analytics)
-apps/
-  ingestor/            # CLI for provider data ingestion
-connectors/            # Provider-specific pricing connectors (GCP, AWS, Azure, Hetzner, Scaleway, etc.)
-migrations/            # Alembic migrations
-scripts/
-  seed.py              # DB seed script
-  test_recommendations.sh
-tests/                 # Pytest test suite
-docs/                  # Additional documentation
-docker/
-docker-compose.yml
-Makefile
-```
-
-## Environment variables
-
-See `.env.example`. Main ones:
-
-- `DATABASE_URL` – Async URL for the app (`postgresql+asyncpg://...`)
-- `DATABASE_URL_SYNC` – Sync URL for Alembic (`postgresql://...`)
-- `APP_ENV`, `DEBUG`, `HOST`, `PORT`
-
 ## Documentation
 
-- [Architecture](docs/architecture.md) -- data model, recommendation engine, ingestion pipeline, and integration with Cloudburst
-- [End-to-End Manual Testing Guide](docs/E2E_MANUAL_TEST.md) -- full step-by-step guide to test every feature
-- [Ingestion Guide](docs/ingestion.md) -- details on provider data ingestion
-- [Usage Guide](USAGE_GUIDE.md) -- API examples and workflows
-- [AWS Pricing API Research](docs/aws_pricing_api_research.md) -- API overview, authentication, rate limits
-- [Azure Pricing API Research](docs/azure_pricing_api_research.md) -- Retail Prices API details
-- [AWS Reserved Instance Research](docs/aws_reserved_instance_research.md) -- RI pricing via GetProducts
+- [Architecture](docs/architecture.md) &mdash; data model, recommendation engine, ingestion pipeline, and integration with Cloudburst
+- [End-to-End Manual Testing Guide](docs/E2E_MANUAL_TEST.md) &mdash; full step-by-step guide to test every feature
+- [Ingestion Guide](docs/ingestion.md) &mdash; details on provider data ingestion
+- [Usage Guide](USAGE_GUIDE.md) &mdash; API examples and workflows
+- [AWS Pricing API Research](docs/aws_pricing_api_research.md) &mdash; API overview, authentication, rate limits
+- [Azure Pricing API Research](docs/azure_pricing_api_research.md) &mdash; Retail Prices API details
+- [AWS Reserved Instance Research](docs/aws_reserved_instance_research.md) &mdash; RI pricing via GetProducts
 - **Swagger UI**: http://localhost:8000/docs (when running)
 
 ## License

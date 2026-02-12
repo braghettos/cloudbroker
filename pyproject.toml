@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cloudbroker"
+version = "0.1.0"
+description = "Production-ready Python backend with FastAPI and PostgreSQL"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.30.0",
+    "psycopg2-binary>=2.9.0",
+    "alembic>=1.14.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "slowapi>=0.1.9",
+    "structlog>=24.1.0",
+    "prometheus-client>=0.20.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.28.0",
+    "ruff>=0.8.0",
+]
+ingest = [
+    "httpx>=0.28.0",
+    "google-cloud-billing>=1.0.0",
+    "boto3>=1.35.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "apps*", "connectors*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]  # Line length handled by formatter, not linter
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy models use string references for relationships (resolved at runtime)
+"app/models/*.py" = ["F821"]
+# CLI loads dotenv before importing app modules
+"apps/ingestor/cli.py" = ["E402"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

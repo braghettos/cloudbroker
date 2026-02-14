@@ -33,7 +33,7 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "all"],
+        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "all"],
         required=True,
         help="Provider to ingest",
     )
@@ -90,7 +90,6 @@ async def run_ingest(
     region: str | None = None,
     quick: bool = False,
 ) -> None:
-    from connectors import aruba as aruba_conn
     from connectors import aws as aws_conn
     from connectors import azure as azure_conn
     from connectors import digitalocean as digitalocean_conn
@@ -173,16 +172,6 @@ async def run_ingest(
                 logger.info("OVH ingestion completed successfully")
             except Exception as e:
                 logger.error(f"OVH ingestion failed: {e}", exc_info=True)
-        if provider in ("aruba", "all"):
-            try:
-                await aruba_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("Aruba ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Aruba ingestion failed: {e}", exc_info=True)
         await db.commit()
 
     # After base GCP ingestion, compute machine type prices

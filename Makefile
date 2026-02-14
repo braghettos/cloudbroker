@@ -5,7 +5,7 @@
 VENV_PYTHON := $(firstword $(wildcard .venv/bin/python .venv/bin/python3))
 PYTHON ?= $(if $(VENV_PYTHON),$(VENV_PYTHON),python3)
 
-.PHONY: help install dev run test test-cov lint up down migrate migrate-down migrate-revision seed ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-aruba ingest-all test-recommendations docker-build clean
+.PHONY: help install dev run test test-cov lint format up down migrate migrate-down migrate-revision seed ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all test-recommendations docker-build clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -31,6 +31,9 @@ test-cov: ## Run pytest with coverage
 
 lint: ## Run ruff linter
 	$(PYTHON) -m ruff check app tests connectors apps
+
+format: ## Run ruff formatter
+	$(PYTHON) -m ruff format app tests connectors apps
 
 test-recommendations: ## Test recommendations API endpoint
 	@./scripts/test_recommendations.sh
@@ -97,9 +100,6 @@ ingest-scaleway: ## Ingest Scaleway (requires SCW_ACCESS_KEY + SCW_SECRET_KEY)
 
 ingest-ovh: ## Ingest OVH (requires OVH keys)
 	$(PYTHON) -m apps.ingestor ingest --provider ovh
-
-ingest-aruba: ## Ingest Aruba Cloud (requires ARUBA_API_KEY + ARUBA_API_SECRET)
-	$(PYTHON) -m apps.ingestor ingest --provider aruba
 
 ingest-all: ## Ingest all providers
 	$(PYTHON) -m apps.ingestor ingest --provider all

@@ -309,4 +309,3 @@ curl -H "X-API-Key: dev-bypass" \
 ## 📚 Additional Resources
 
 - **API Documentation**: `http://localhost:8000/docs`
-- **Ingestion Guide**: `docs/ingestion.md`

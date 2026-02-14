@@ -115,14 +115,10 @@ async def detect_price_changes(
         price_change_percent = (price_change_eur / previous_price) * 100.0
 
         # Get instance type and region names
-        it_result = await db.execute(
-            select(InstanceType.name).where(InstanceType.id == instance_type_id)
-        )
+        it_result = await db.execute(select(InstanceType.name).where(InstanceType.id == instance_type_id))
         instance_type_name = it_result.scalar_one_or_none() or f"ID:{instance_type_id}"
 
-        region_result = await db.execute(
-            select(Region.slug).where(Region.id == region_id)
-        )
+        region_result = await db.execute(select(Region.slug).where(Region.id == region_id))
         region_slug = region_result.scalar_one_or_none() or f"ID:{region_id}"
 
         changes.append(

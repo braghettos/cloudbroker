@@ -18,6 +18,7 @@ async def client():
 async def test_get_providers_without_auth(client, monkeypatch):
     """Test providers endpoint without API key (dev mode)."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 
@@ -35,6 +36,7 @@ async def test_get_providers_without_auth(client, monkeypatch):
 async def test_get_providers_pagination(client, monkeypatch):
     """Test providers endpoint pagination."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 
@@ -56,6 +58,7 @@ async def test_get_providers_pagination(client, monkeypatch):
 async def test_get_providers_invalid_limit(client, monkeypatch):
     """Test providers endpoint with invalid limit."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 

@@ -22,10 +22,12 @@ limiter = Limiter(
     default_limits=[f"{settings.rate_limit_per_minute}/minute"],
 )
 
+
 # Rate limit exceeded handler
 def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     """Custom handler for rate limit exceeded."""
     from fastapi.responses import JSONResponse
+
     return JSONResponse(
         status_code=429,
         content={

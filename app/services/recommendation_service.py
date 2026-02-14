@@ -82,7 +82,9 @@ def _compute_spot_availability_score(
     price_range = max_price - min_price if max_price > min_price else 1.0
 
     # Larger instances = better availability (less competition)
-    size_score = min(1.0, (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5)
+    size_score = min(
+        1.0, (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5
+    )
 
     # More expensive instances = better availability (less demand)
     price_score = (price_per_hour - min_price) / price_range if price_range > 0 else 0.5
@@ -118,7 +120,9 @@ def _compute_interruption_risk_score(
     price_range = max_price - min_price if max_price > min_price else 1.0
 
     # Smaller instances = higher risk (more competition)
-    size_risk = 1.0 - min(1.0, (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5)
+    size_risk = 1.0 - min(
+        1.0, (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5
+    )
 
     # Cheaper instances = higher risk (more demand)
     price_risk = 1.0 - ((price_per_hour - min_price) / price_range if price_range > 0 else 0.5)
@@ -163,16 +167,22 @@ class RecommendationService:
 
         # Determine if using multi-criteria (cost/performance/reliability) or legacy (price/fit) scoring
         use_multi_criteria = (
-            req.cost_weight is not None
-            or req.performance_weight is not None
-            or req.reliability_weight is not None
+            req.cost_weight is not None or req.performance_weight is not None or req.reliability_weight is not None
         )
 
         if use_multi_criteria:
             # Multi-criteria scoring: cost, performance, reliability
             cost_w = req.cost_weight if req.cost_weight is not None else settings.recommendation_cost_weight
-            perf_w = req.performance_weight if req.performance_weight is not None else settings.recommendation_performance_weight
-            rel_w = req.reliability_weight if req.reliability_weight is not None else settings.recommendation_reliability_weight
+            perf_w = (
+                req.performance_weight
+                if req.performance_weight is not None
+                else settings.recommendation_performance_weight
+            )
+            rel_w = (
+                req.reliability_weight
+                if req.reliability_weight is not None
+                else settings.recommendation_reliability_weight
+            )
             total = cost_w + perf_w + rel_w
             if total <= 0:
                 cost_w = perf_w = rel_w = 1.0 / 3.0
@@ -215,7 +225,9 @@ class RecommendationService:
         except ValueError:
             is_spot = False
 
-        scored: list[tuple[float, float, float, float | None, float | None, float | None, float | None, _Candidate]] = []
+        scored: list[
+            tuple[float, float, float, float | None, float | None, float | None, float | None, _Candidate]
+        ] = []
         for c in candidates:
             resource_fit = min(1.0, req.min_vcpu / c.vcpu) * min(1.0, req.min_ram_gb / c.ram_gb)
             normalized_price = (max_price - c.price_per_hour) / price_range if price_range else 1.0
@@ -236,7 +248,9 @@ class RecommendationService:
                 cost_score = normalized_price  # Higher = cheaper = better
                 perf_score = _compute_performance_score(c.vcpu, c.ram_gb, c.family, candidates)
                 rel_score = _compute_reliability_score(c.provider_type)
-                score = (cost_weight_norm * cost_score) + (perf_weight_norm * perf_score) + (rel_weight_norm * rel_score)
+                score = (
+                    (cost_weight_norm * cost_score) + (perf_weight_norm * perf_score) + (rel_weight_norm * rel_score)
+                )
                 perf_score_out = perf_score
                 rel_score_out = rel_score
             else:
@@ -252,12 +266,23 @@ class RecommendationService:
             if is_spot and interrupt_risk_score is not None:
                 # Penalize high-risk instances: multiply by (1 - risk * 0.3)
                 # This means a risk of 1.0 reduces score by 30%, risk of 0.5 reduces by 15%
-                score *= (1.0 - interrupt_risk_score * 0.3)
+                score *= 1.0 - interrupt_risk_score * 0.3
 
             # Apply preference multiplier for preferred providers
             if c.provider_slug in preferred_set:
                 score *= preference_multiplier
-            scored.append((score, resource_fit, normalized_price, perf_score_out, rel_score_out, spot_avail_score, interrupt_risk_score, c))
+            scored.append(
+                (
+                    score,
+                    resource_fit,
+                    normalized_price,
+                    perf_score_out,
+                    rel_score_out,
+                    spot_avail_score,
+                    interrupt_risk_score,
+                    c,
+                )
+            )
 
         scored.sort(key=lambda x: -x[0])
         top = scored[: req.limit]

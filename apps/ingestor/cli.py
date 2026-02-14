@@ -14,6 +14,7 @@ sys.path.insert(0, str(_project_root))
 # Load .env so AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are available to boto3
 try:
     from dotenv import load_dotenv
+
     load_dotenv(_project_root / ".env")
 except ImportError:
     pass
@@ -178,6 +179,7 @@ async def run_ingest(
     if provider in ("gcp", "all"):
         try:
             from connectors import gcp_machine_types as gcp_machines_conn
+
             async with AsyncSessionLocal() as db:
                 await gcp_machines_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
                 await db.commit()

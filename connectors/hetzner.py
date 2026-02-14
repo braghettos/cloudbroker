@@ -95,7 +95,9 @@ async def ingest(
         if not slug:
             continue
         country = (loc.get("country") or "")[:2].upper()
-        is_eu = country in ("DE", "FI", "AT", "FR", "NL", "PL", "ES", "IT", "IE", "BE", "SE") or slug in EU_LOCATION_NAMES
+        is_eu = (
+            country in ("DE", "FI", "AT", "FR", "NL", "PL", "ES", "IT", "IE", "BE", "SE") or slug in EU_LOCATION_NAMES
+        )
         if only_eu and not is_eu:
             continue
         loc_by_slug[slug] = {

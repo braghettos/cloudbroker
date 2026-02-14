@@ -43,7 +43,7 @@ Represents a cloud provider. Each has a slug (e.g. `aws`, `hetzner`, `scaleway`)
 | Type | Examples | Reliability Score |
 |------|----------|-------------------|
 | `HYPERSCALER` | AWS, Azure, GCP | 0.95 |
-| `EU` | Scaleway, OVH, Aruba | 0.85 |
+| `EU` | Scaleway, OVH | 0.85 |
 | `REGIONAL` | Hetzner, DigitalOcean | 0.75 |
 
 ### Region
@@ -215,7 +215,7 @@ connectors/hetzner.py         (provider-specific API client)
 python -m apps.ingestor ingest --provider <name> [--only-eu] [--quick] [--region <slug>]
 ```
 
-Supported providers: `gcp`, `hetzner`, `aws`, `azure`, `digitalocean`, `scaleway`, `ovh`, `aruba`, `all`.
+Supported providers: `gcp`, `hetzner`, `aws`, `azure`, `digitalocean`, `scaleway`, `ovh`, `all`.
 
 ### Idempotency
 
@@ -250,7 +250,6 @@ All prices are stored with their original currency. EUR normalization happens at
 | DigitalOcean | DO API | API token | USD |
 | Scaleway | Scaleway API | Access key + secret | EUR |
 | OVH | OVH API | App key + secret | EUR |
-| Aruba | Aruba Cloud API | API key + secret | EUR |
 
 ## Price Analytics
 

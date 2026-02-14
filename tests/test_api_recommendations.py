@@ -18,6 +18,7 @@ async def client():
 async def test_post_recommendations_valid_request(client, monkeypatch):
     """Test recommendations endpoint with valid request."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 
@@ -43,6 +44,7 @@ async def test_post_recommendations_valid_request(client, monkeypatch):
 async def test_post_recommendations_invalid_request(client, monkeypatch):
     """Test recommendations endpoint with invalid request."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 
@@ -79,6 +81,7 @@ async def test_post_recommendations_invalid_request(client, monkeypatch):
 async def test_post_recommendations_preferred_providers(client, monkeypatch):
     """With preferred_providers, preferred providers should rank first when results exist."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 
@@ -105,6 +108,7 @@ async def test_post_recommendations_preferred_providers(client, monkeypatch):
 async def test_post_recommendations_allowed_providers(client, monkeypatch):
     """With allowed_providers, only those providers should appear in results."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 

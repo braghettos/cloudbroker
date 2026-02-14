@@ -26,9 +26,15 @@ SCALEWAY_BASE = "https://api.scaleway.com/instance/v1"
 # Scaleway availability zones (regions)
 # EU zones: fr-par-1/2/3 (Paris), nl-ams-1/2/3 (Amsterdam), pl-waw-1/2/3 (Warsaw)
 SCALEWAY_ZONES = [
-    "fr-par-1", "fr-par-2", "fr-par-3",  # Paris, France
-    "nl-ams-1", "nl-ams-2", "nl-ams-3",  # Amsterdam, Netherlands
-    "pl-waw-1", "pl-waw-2", "pl-waw-3",  # Warsaw, Poland
+    "fr-par-1",
+    "fr-par-2",
+    "fr-par-3",  # Paris, France
+    "nl-ams-1",
+    "nl-ams-2",
+    "nl-ams-3",  # Amsterdam, Netherlands
+    "pl-waw-1",
+    "pl-waw-2",
+    "pl-waw-3",  # Warsaw, Poland
 ]
 
 # Map zone codes to region metadata
@@ -145,7 +151,9 @@ async def ingest(
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:
-        logger.warning("Scaleway only supports on-demand pricing, ignoring purchase_model", purchase_model=purchase_model)
+        logger.warning(
+            "Scaleway only supports on-demand pricing, ignoring purchase_model", purchase_model=purchase_model
+        )
         purchase = PurchaseModel.ON_DEMAND
 
     # Ensure provider
@@ -199,9 +207,12 @@ async def ingest(
                 first_item = instance_types[0]
                 if isinstance(first_item, dict):
                     ram_raw = first_item.get("ram")
-                    logger.info("First instance type sample", zone=zone,
-                               ram_raw=ram_raw,
-                               ram_type=type(ram_raw).__name__ if ram_raw is not None else "None")
+                    logger.info(
+                        "First instance type sample",
+                        zone=zone,
+                        ram_raw=ram_raw,
+                        ram_type=type(ram_raw).__name__ if ram_raw is not None else "None",
+                    )
 
             processed_count = 0
             skipped_no_alt_names = 0
@@ -233,12 +244,7 @@ async def ingest(
 
                 # Extract instance specs
                 # Try multiple possible field names
-                vcpu = int(
-                    it_type.get("ncpus", 0)
-                    or it_type.get("cpu", 0)
-                    or it_type.get("vcores", 0)
-                    or 0
-                )
+                vcpu = int(it_type.get("ncpus", 0) or it_type.get("cpu", 0) or it_type.get("vcores", 0) or 0)
                 ram_value = it_type.get("ram") or it_type.get("memory") or it_type.get("ram_mb") or 0
                 # Scaleway API returns RAM in bytes
                 if isinstance(ram_value, (int, float)):
@@ -275,9 +281,7 @@ async def ingest(
                     price_hourly_eur = None
                 elif isinstance(price_info, dict):
                     price_hourly_eur = (
-                        price_info.get("price_incl_tax")
-                        or price_info.get("price")
-                        or price_info.get("value")
+                        price_info.get("price_incl_tax") or price_info.get("price") or price_info.get("value")
                     )
                 elif isinstance(price_info, (int, float)):
                     price_hourly_eur = float(price_info)
@@ -317,14 +321,23 @@ async def ingest(
             error_msg = str(e)
             if isinstance(e, KeyError):
                 error_msg = f"KeyError: missing key '{e.args[0] if e.args else 'unknown'}'"
-            logger.warning("Error processing instance types for zone", zone=zone, error=error_msg, error_type=type(e).__name__)
+            logger.warning(
+                "Error processing instance types for zone", zone=zone, error=error_msg, error_type=type(e).__name__
+            )
             import traceback
+
             logger.debug("Traceback", traceback=traceback.format_exc())
             continue
         else:
             # Log processing stats if no exception
             if processed_count > 0 or skipped_no_alt_names > 0 or skipped_no_price > 0:
-                logger.info("Zone processing stats", zone=zone, processed=processed_count, skipped_no_alt_names=skipped_no_alt_names, skipped_no_price=skipped_no_price)
+                logger.info(
+                    "Zone processing stats",
+                    zone=zone,
+                    processed=processed_count,
+                    skipped_no_alt_names=skipped_no_alt_names,
+                    skipped_no_price=skipped_no_price,
+                )
 
     logger.info(
         "Scaleway ingestion completed",

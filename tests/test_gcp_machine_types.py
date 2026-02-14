@@ -97,6 +97,7 @@ async def test_e2_standard_2_price_computation():
 
         # Verify e2-standard-2 was created
         from sqlalchemy import select, delete
+
         e2_std2_stmt = (
             select(InstanceType)
             .where(InstanceType.provider_id == provider.id)
@@ -125,13 +126,16 @@ async def test_e2_standard_2_price_computation():
         assert price is not None, "Price should be computed for e2-standard-2"
         # Expected: 2 * 0.02 + 8 * 0.003 = 0.04 + 0.024 = 0.064
         expected_price = 0.064
-        assert abs(price.price_eur_per_hour - expected_price) < 0.0001, \
+        assert abs(price.price_eur_per_hour - expected_price) < 0.0001, (
             f"Expected {expected_price}, got {price.price_eur_per_hour}"
+        )
 
         # Cleanup: delete in order respecting foreign keys
-        await db.execute(delete(Price).where(Price.instance_type_id.in_(
-            select(InstanceType.id).where(InstanceType.provider_id == provider.id)
-        )))
+        await db.execute(
+            delete(Price).where(
+                Price.instance_type_id.in_(select(InstanceType.id).where(InstanceType.provider_id == provider.id))
+            )
+        )
         await db.execute(delete(InstanceType).where(InstanceType.provider_id == provider.id))
         await db.execute(delete(Region).where(Region.provider_id == provider.id))
         await db.execute(delete(Provider).where(Provider.id == provider.id))
@@ -211,6 +215,7 @@ async def test_all_e2_machine_types_created():
 
         # Verify all machine types exist
         from sqlalchemy import select, delete
+
         for spec in E2_MACHINE_TYPES:
             stmt = (
                 select(InstanceType)
@@ -226,9 +231,11 @@ async def test_all_e2_machine_types_created():
             assert instance_type.arch == spec.arch
 
         # Cleanup: delete in order respecting foreign keys
-        await db.execute(delete(Price).where(Price.instance_type_id.in_(
-            select(InstanceType.id).where(InstanceType.provider_id == provider.id)
-        )))
+        await db.execute(
+            delete(Price).where(
+                Price.instance_type_id.in_(select(InstanceType.id).where(InstanceType.provider_id == provider.id))
+            )
+        )
         await db.execute(delete(InstanceType).where(InstanceType.provider_id == provider.id))
         await db.execute(delete(Region).where(Region.provider_id == provider.id))
         await db.execute(delete(Provider).where(Provider.id == provider.id))

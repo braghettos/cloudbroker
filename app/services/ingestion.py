@@ -70,12 +70,7 @@ async def ensure_instance_type(
     metadata_json: str | None = None,
 ) -> InstanceType:
     """Get or create instance type by (provider_id, name) (idempotent)."""
-    stmt = (
-        select(InstanceType)
-        .where(InstanceType.provider_id == provider_id)
-        .where(InstanceType.name == name)
-        .limit(1)
-    )
+    stmt = select(InstanceType).where(InstanceType.provider_id == provider_id).where(InstanceType.name == name).limit(1)
     result = await db.execute(stmt)
     row = result.scalars().first()
     if row is not None:
@@ -122,13 +117,17 @@ async def append_price(
     """Insert a price row if no duplicate for same (instance_type_id, region_id, purchase_model, hour). Append-only, idempotent per hour."""
     ts = timestamp or datetime.datetime.now(datetime.timezone.utc)
     hour_ts = _truncate_to_hour(ts)
-    stmt = select(Price.id).where(
-        Price.instance_type_id == instance_type_id,
-        Price.region_id == region_id,
-        Price.purchase_model == purchase_model,
-        Price.timestamp >= hour_ts,
-        Price.timestamp < hour_ts + datetime.timedelta(hours=1),
-    ).limit(1)
+    stmt = (
+        select(Price.id)
+        .where(
+            Price.instance_type_id == instance_type_id,
+            Price.region_id == region_id,
+            Price.purchase_model == purchase_model,
+            Price.timestamp >= hour_ts,
+            Price.timestamp < hour_ts + datetime.timedelta(hours=1),
+        )
+        .limit(1)
+    )
     result = await db.execute(stmt)
     if result.scalars().first() is not None:
         return None

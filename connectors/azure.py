@@ -1,7 +1,6 @@
 """Azure Retail Prices API connector: VM sizes and on-demand pricing.
 
 Uses the public, unauthenticated Azure Retail Prices API (no Azure SDK required).
-See docs/azure_pricing_api_research.md.
 """
 
 from __future__ import annotations
@@ -95,7 +94,11 @@ async def _fetch_retail_prices_page(
     """
     if next_page_link:
         # NextPageLink can be full URL or path; ensure we use it as-is (API returns full URL)
-        url = next_page_link if next_page_link.startswith("http") else f"{AZURE_RETAIL_PRICES_URL.rstrip('/')}{next_page_link if next_page_link.startswith('/') else '/' + next_page_link}"
+        url = (
+            next_page_link
+            if next_page_link.startswith("http")
+            else f"{AZURE_RETAIL_PRICES_URL.rstrip('/')}{next_page_link if next_page_link.startswith('/') else '/' + next_page_link}"
+        )
         r = await client.get(url, timeout=60.0)
     else:
         params = {
@@ -205,9 +208,7 @@ async def ingest(
                 continue
             next_link: str | None = None
             while True:
-                items, next_link = await _fetch_retail_prices_page(
-                    client, spec.slug, next_page_link=next_link
-                )
+                items, next_link = await _fetch_retail_prices_page(client, spec.slug, next_page_link=next_link)
                 for item in items:
                     # API uses productName for category; VM size is in armSkuName or skuName.
                     sku = (item.get("armSkuName") or item.get("skuName") or "").strip()

@@ -10,9 +10,7 @@ class InstanceType(Base):
     """VM/instance type (e.g. n1-standard-4, t3.medium)."""
 
     __tablename__ = "instance_types"
-    __table_args__ = (
-        UniqueConstraint("provider_id", "name", name="uq_instance_type_provider_name"),
-    )
+    __table_args__ = (UniqueConstraint("provider_id", "name", name="uq_instance_type_provider_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     provider_id: Mapped[int] = mapped_column(

@@ -127,7 +127,9 @@ async def ingest(
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:
-        logger.warning("DigitalOcean only supports on-demand pricing, ignoring purchase_model", purchase_model=purchase_model)
+        logger.warning(
+            "DigitalOcean only supports on-demand pricing, ignoring purchase_model", purchase_model=purchase_model
+        )
         purchase = PurchaseModel.ON_DEMAND
 
     # Fetch regions and sizes

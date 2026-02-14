@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 @dataclass
 class MachineTypeSpec:
     """Specification for a GCP machine type."""
+
     name: str
     vcpu: int
     ram_gb: float
@@ -42,13 +43,13 @@ def _build_machine_type_catalog() -> list[MachineTypeSpec]:
 
     for size in e2_standard_sizes:
         if size <= 16:  # Limit to sizes we had before, expand gradually
-            catalog.append(MachineTypeSpec(f"e2-standard-{size}", vcpu=size, ram_gb=size*4.0, family="e2"))
+            catalog.append(MachineTypeSpec(f"e2-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="e2"))
     for size in e2_highmem_sizes:
         if size <= 16:
-            catalog.append(MachineTypeSpec(f"e2-highmem-{size}", vcpu=size, ram_gb=size*8.0, family="e2"))
+            catalog.append(MachineTypeSpec(f"e2-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="e2"))
     for size in e2_highcpu_sizes:
         if size <= 16:
-            catalog.append(MachineTypeSpec(f"e2-highcpu-{size}", vcpu=size, ram_gb=size*2.0, family="e2"))
+            catalog.append(MachineTypeSpec(f"e2-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="e2"))
 
     # N1 family: first-generation general-purpose (standard, highmem, highcpu)
     n1_standard_sizes = [1, 2, 4, 8, 16, 32, 64, 96]
@@ -56,11 +57,11 @@ def _build_machine_type_catalog() -> list[MachineTypeSpec]:
     n1_highcpu_sizes = [2, 4, 8, 16, 32, 64, 96]
 
     for size in n1_standard_sizes:
-        catalog.append(MachineTypeSpec(f"n1-standard-{size}", vcpu=size, ram_gb=size*3.75, family="n1"))
+        catalog.append(MachineTypeSpec(f"n1-standard-{size}", vcpu=size, ram_gb=size * 3.75, family="n1"))
     for size in n1_highmem_sizes:
-        catalog.append(MachineTypeSpec(f"n1-highmem-{size}", vcpu=size, ram_gb=size*6.5, family="n1"))
+        catalog.append(MachineTypeSpec(f"n1-highmem-{size}", vcpu=size, ram_gb=size * 6.5, family="n1"))
     for size in n1_highcpu_sizes:
-        catalog.append(MachineTypeSpec(f"n1-highcpu-{size}", vcpu=size, ram_gb=size*0.9, family="n1"))
+        catalog.append(MachineTypeSpec(f"n1-highcpu-{size}", vcpu=size, ram_gb=size * 0.9, family="n1"))
 
     # N2 family: second-generation general-purpose (standard, highmem, highcpu)
     n2_standard_sizes = [2, 4, 8, 16, 32, 48, 64, 80, 96, 128]
@@ -68,21 +69,23 @@ def _build_machine_type_catalog() -> list[MachineTypeSpec]:
     n2_highcpu_sizes = [2, 4, 8, 16, 32, 48, 64, 80, 96]
 
     for size in n2_standard_sizes:
-        catalog.append(MachineTypeSpec(f"n2-standard-{size}", vcpu=size, ram_gb=size*4.0, family="n2"))
+        catalog.append(MachineTypeSpec(f"n2-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="n2"))
     for size in n2_highmem_sizes:
-        catalog.append(MachineTypeSpec(f"n2-highmem-{size}", vcpu=size, ram_gb=size*8.0, family="n2"))
+        catalog.append(MachineTypeSpec(f"n2-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="n2"))
     for size in n2_highcpu_sizes:
-        catalog.append(MachineTypeSpec(f"n2-highcpu-{size}", vcpu=size, ram_gb=size*2.0, family="n2"))
+        catalog.append(MachineTypeSpec(f"n2-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="n2"))
 
     # C2 family: compute-optimized (Intel Skylake)
     c2_standard_sizes = [4, 8, 16, 30, 60]
     for size in c2_standard_sizes:
-        catalog.append(MachineTypeSpec(f"c2-standard-{size}", vcpu=size, ram_gb=size*4.0, family="c2"))
+        catalog.append(MachineTypeSpec(f"c2-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c2"))
 
     # C2D family: compute-optimized (AMD Milan)
     c2d_standard_sizes = [2, 4, 8, 16, 32, 56, 112]
     for size in c2d_standard_sizes:
-        catalog.append(MachineTypeSpec(f"c2d-standard-{size}", vcpu=size, ram_gb=size*4.0, family="c2d", arch="x86_64"))
+        catalog.append(
+            MachineTypeSpec(f"c2d-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c2d", arch="x86_64")
+        )
 
     # M1 family: memory-optimized
     catalog.append(MachineTypeSpec("m1-megamem-96", vcpu=96, ram_gb=1433.6, family="m1"))
@@ -98,7 +101,9 @@ def _build_machine_type_catalog() -> list[MachineTypeSpec]:
     # T2D family: AMD-based general-purpose
     t2d_standard_sizes = [1, 2, 4, 8, 16, 32, 48, 60, 80, 96]
     for size in t2d_standard_sizes:
-        catalog.append(MachineTypeSpec(f"t2d-standard-{size}", vcpu=size, ram_gb=size*4.0, family="t2d", arch="x86_64"))
+        catalog.append(
+            MachineTypeSpec(f"t2d-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="t2d", arch="x86_64")
+        )
 
     return catalog
 
@@ -186,9 +191,7 @@ async def ingest(
     ram_it = ram_it_result.scalars().first()
 
     if not cpu_it or not ram_it:
-        raise RuntimeError(
-            "GCP unit price instance types not found. Run base GCP ingestion first."
-        )
+        raise RuntimeError("GCP unit price instance types not found. Run base GCP ingestion first.")
 
     # Get FX rate for USD->EUR conversion
     rate_usd_eur = await get_rate_to_eur(db, "USD")
@@ -233,10 +236,12 @@ async def ingest(
                 ram_gb=spec.ram_gb,
                 family=spec.family,
                 arch=spec.arch,
-                metadata_json=json.dumps({
-                    "description": f"GCP {spec.name} machine type",
-                    "computed_from_unit_prices": True,
-                }),
+                metadata_json=json.dumps(
+                    {
+                        "description": f"GCP {spec.name} machine type",
+                        "computed_from_unit_prices": True,
+                    }
+                ),
             )
             await db.flush()
 

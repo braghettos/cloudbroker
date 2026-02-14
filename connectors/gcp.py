@@ -144,6 +144,7 @@ async def ingest(
     await db.flush()
 
     eu_region_prefixes = ("europe-", "eu-")
+
     def is_eu_region(region_id: str) -> bool:
         return any(region_id.lower().startswith(p) for p in eu_region_prefixes)
 

@@ -28,10 +28,7 @@ def normalize_arch(arch: str) -> str:
     elif arch_lower in ("arm64", "aarch64"):
         return "arm64"
     else:
-        raise ValueError(
-            f"Unsupported architecture: {arch}. "
-            f"Supported values: amd64, x86_64, arm64, aarch64"
-        )
+        raise ValueError(f"Unsupported architecture: {arch}. Supported values: amd64, x86_64, arm64, aarch64")
 
 
 class RegionConstraint(str, Enum):
@@ -48,7 +45,7 @@ class RecommendationRequest(BaseModel):
     min_ram_gb: float = Field(..., gt=0, description="Minimum RAM in GB required (int or float)")
     arch: str = Field(
         ...,
-        description="Architecture requirement. Accepts Kubernetes values (amd64, x86_64, arm64, aarch64) and normalizes to canonical values (x86_64, arm64)."
+        description="Architecture requirement. Accepts Kubernetes values (amd64, x86_64, arm64, aarch64) and normalizes to canonical values (x86_64, arm64).",
     )
 
     @field_validator("arch")
@@ -56,6 +53,7 @@ class RecommendationRequest(BaseModel):
     def normalize_arch(cls, v: str) -> str:
         """Normalize architecture value to canonical form."""
         return normalize_arch(v)
+
     region_constraint: RegionConstraint = Field(
         default=RegionConstraint.ANY,
         description="Restrict to EU regions when EU",
@@ -118,8 +116,12 @@ class RecommendationExplain(BaseModel):
         ...,
         description="Price score component (0-1, higher = cheaper relative to result set)",
     )
-    price_weight: float = Field(..., description="Weight applied to price in score (legacy, for backward compatibility)")
-    fit_weight: float = Field(..., description="Weight applied to resource_fit in score (legacy, for backward compatibility)")
+    price_weight: float = Field(
+        ..., description="Weight applied to price in score (legacy, for backward compatibility)"
+    )
+    fit_weight: float = Field(
+        ..., description="Weight applied to resource_fit in score (legacy, for backward compatibility)"
+    )
     performance_score: float | None = Field(
         default=None,
         description="Performance score component (0-1, higher = better performance relative to result set)",
@@ -129,8 +131,12 @@ class RecommendationExplain(BaseModel):
         description="Reliability score component (0-1, higher = more reliable provider)",
     )
     cost_weight: float | None = Field(default=None, description="Weight applied to cost in multi-criteria score")
-    performance_weight: float | None = Field(default=None, description="Weight applied to performance in multi-criteria score")
-    reliability_weight: float | None = Field(default=None, description="Weight applied to reliability in multi-criteria score")
+    performance_weight: float | None = Field(
+        default=None, description="Weight applied to performance in multi-criteria score"
+    )
+    reliability_weight: float | None = Field(
+        default=None, description="Weight applied to reliability in multi-criteria score"
+    )
     spot_availability_score: float | None = Field(
         default=None,
         description="Spot availability score (0-1, higher = more likely available as spot). Only present when purchase_model=spot.",

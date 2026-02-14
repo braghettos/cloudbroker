@@ -36,6 +36,7 @@ async def test_api_endpoints_require_auth(client, monkeypatch):
     """All /api/* endpoints should require API key when API_KEY is set."""
     # Set API key to require authentication
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "api_key", "required-key")
     monkeypatch.setattr(settings, "app_env", "production")
 
@@ -49,6 +50,7 @@ async def test_api_endpoints_require_auth(client, monkeypatch):
 async def test_api_endpoints_with_invalid_key(client, monkeypatch):
     """API endpoints should reject invalid API keys."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "api_key", "correct-key")
     monkeypatch.setattr(settings, "app_env", "production")
 
@@ -62,6 +64,7 @@ async def test_api_endpoints_with_valid_key(client, api_key, monkeypatch):
     """API endpoints should accept valid API keys."""
     # Set API key in settings
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "api_key", api_key)
     monkeypatch.setattr(settings, "app_env", "production")
 
@@ -76,6 +79,7 @@ async def test_api_endpoints_with_valid_key(client, api_key, monkeypatch):
 async def test_development_mode_bypasses_auth(client, monkeypatch):
     """In development mode, API key auth should be bypassed if API_KEY is not set."""
     from app.core.config import settings
+
     monkeypatch.setattr(settings, "app_env", "development")
     monkeypatch.setattr(settings, "api_key", None)
 

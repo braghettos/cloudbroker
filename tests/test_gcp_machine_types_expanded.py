@@ -208,9 +208,11 @@ async def test_n1_standard_4_price_computation():
         # Cleanup
         try:
             await db.execute(delete(Price).where(Price.region_id == region.id))
-            await db.execute(delete(InstanceType).where(
-                InstanceType.provider_id == provider.id
-            ).where(InstanceType.name.like("n1-%")))
+            await db.execute(
+                delete(InstanceType)
+                .where(InstanceType.provider_id == provider.id)
+                .where(InstanceType.name.like("n1-%"))
+            )
             await db.execute(delete(Region).where(Region.id == region.id))
             await db.commit()
         finally:
@@ -300,9 +302,7 @@ async def test_all_families_created_during_ingestion():
         # Cleanup
         try:
             await db.execute(delete(Price).where(Price.region_id == region.id))
-            await db.execute(delete(InstanceType).where(
-                InstanceType.provider_id == provider.id
-            ))
+            await db.execute(delete(InstanceType).where(InstanceType.provider_id == provider.id))
             await db.execute(delete(Region).where(Region.id == region.id))
             await db.commit()
         finally:

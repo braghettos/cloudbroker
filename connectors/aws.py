@@ -1,7 +1,7 @@
 """AWS Pricing API connector: EC2 instance types, on-demand and spot pricing.
 
 Uses AWS Price List Query API (boto3 pricing client) for on-demand and
-EC2 describe_spot_price_history for spot. See docs/aws_pricing_api_research.md.
+EC2 describe_spot_price_history for spot.
 """
 
 from __future__ import annotations
@@ -65,9 +65,7 @@ def _get_pricing_client():
     try:
         import boto3
     except ImportError:
-        raise RuntimeError(
-            "boto3 is required for AWS ingestion. Install with: pip install boto3"
-        )
+        raise RuntimeError("boto3 is required for AWS ingestion. Install with: pip install boto3")
     return boto3.client("pricing", region_name=AWS_PRICING_REGION)
 
 
@@ -328,14 +326,18 @@ async def _run_ondemand_ingest(
                 family = family[:64]
             generation = None
             arch = _map_aws_physical_processor_to_arch(attrs.get("physicalProcessor"))
-            metadata = json.dumps(
-                {
-                    "instanceFamily": attrs.get("instanceFamily"),
-                    "networkPerformance": attrs.get("networkPerformance"),
-                    "storage": attrs.get("storage"),
-                    "physicalProcessor": attrs.get("physicalProcessor"),
-                }
-            ) if any(attrs.get(k) for k in ("instanceFamily", "networkPerformance", "storage", "physicalProcessor")) else None
+            metadata = (
+                json.dumps(
+                    {
+                        "instanceFamily": attrs.get("instanceFamily"),
+                        "networkPerformance": attrs.get("networkPerformance"),
+                        "storage": attrs.get("storage"),
+                        "physicalProcessor": attrs.get("physicalProcessor"),
+                    }
+                )
+                if any(attrs.get(k) for k in ("instanceFamily", "networkPerformance", "storage", "physicalProcessor"))
+                else None
+            )
 
             it = await ensure_instance_type(
                 db,

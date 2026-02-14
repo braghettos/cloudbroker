@@ -23,6 +23,7 @@ async def test_provider_type_hyperscaler_stores_lowercase():
         assert p.type.value == "hyperscaler"
         # Query back from DB to verify stored value
         from sqlalchemy import select
+
         stmt = select(Provider).where(Provider.slug == "test-provider")
         result = await db.execute(stmt)
         fetched = result.scalars().first()

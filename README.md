@@ -5,7 +5,7 @@
 <h1 align="center">CloudBroker</h1>
 
 <p align="center">
-  Multi-cloud compute pricing marketplace &mdash; ingests instance data from 8+ providers, normalises prices to EUR, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints.
+  Multi-cloud compute pricing marketplace &mdash; ingests instance data from 7 providers, normalises prices to EUR, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints.
 </p>
 
 ## Architecture
@@ -14,7 +14,7 @@
 graph TB
     subgraph Ingestion ["Ingestion Pipeline"]
         CLI["make ingest-*<br/>(CLI)"]
-        CON["Connectors<br/>GCP · AWS · Azure<br/>Hetzner · Scaleway · OVH<br/>DigitalOcean · Aruba"]
+        CON["Connectors<br/>GCP · AWS · Azure<br/>Hetzner · Scaleway · OVH<br/>DigitalOcean"]
         SVC["Ingestion Service<br/>(upsert + FX)"]
         CLI --> CON --> SVC
     end
@@ -56,7 +56,7 @@ graph TB
 
 ## Features
 
-- **8 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean, Aruba
+- **7 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean
 - **EUR-normalised pricing** &mdash; all prices converted via FX rates
 - **Dual scoring modes** &mdash; legacy (price + fit) or multi-criteria (cost, performance, reliability)
 - **Transparent ranking** &mdash; every recommendation includes an `explain` block
@@ -205,13 +205,9 @@ curl -s -X POST http://localhost:8000/api/recommendations \
 
 ## Documentation
 
+- [Article series](docs/articles/) &mdash; four-part intro (problem and product, how it works, interface, scope and run)
 - [Architecture](docs/architecture.md) &mdash; data model, recommendation engine, ingestion pipeline, and integration with Cloudburst
-- [End-to-End Manual Testing Guide](docs/E2E_MANUAL_TEST.md) &mdash; full step-by-step guide to test every feature
-- [Ingestion Guide](docs/ingestion.md) &mdash; details on provider data ingestion
 - [Usage Guide](USAGE_GUIDE.md) &mdash; API examples and workflows
-- [AWS Pricing API Research](docs/aws_pricing_api_research.md) &mdash; API overview, authentication, rate limits
-- [Azure Pricing API Research](docs/azure_pricing_api_research.md) &mdash; Retail Prices API details
-- [AWS Reserved Instance Research](docs/aws_reserved_instance_research.md) &mdash; RI pricing via GetProducts
 - **Swagger UI**: http://localhost:8000/docs (when running)
 
 ## License

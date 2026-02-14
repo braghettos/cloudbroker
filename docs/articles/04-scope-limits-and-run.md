@@ -28,7 +28,7 @@ CloudBroker **ingests** instance types and hourly prices from seven providers in
 1. **Clone** the repo.
 2. **Copy** `.env.example` to `.env` and set any required vars (e.g. DB URL, optional API key).
 3. **Start** the stack: `make up` (API + PostgreSQL).
-4. **Migrate** and **seed**: `make migrate`, `make seed`.
+4. **Migrate**: `make migrate`.
 5. **Ingest** for the providers you care about: `make ingest-hetzner`, `make ingest-gcp`, or `make ingest-all`.
 
 The API is available at `http://localhost:8000`; interactive docs at `/docs`. Any client can call `POST /api/recommendations`. For a Kubernetes controller that uses this API to provision burst nodes, see **[Cloudburst Autoscaler](https://github.com/braghettos/cloudburst-autoscaler)** (separate project and docs).
@@ -41,7 +41,6 @@ cd cloudbroker
 cp .env.example .env
 make up
 make migrate
-make seed
 make ingest-all
 # API at http://localhost:8000, Swagger at http://localhost:8000/docs
 ```

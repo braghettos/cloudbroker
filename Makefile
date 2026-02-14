@@ -5,7 +5,7 @@
 VENV_PYTHON := $(firstword $(wildcard .venv/bin/python .venv/bin/python3))
 PYTHON ?= $(if $(VENV_PYTHON),$(VENV_PYTHON),python3)
 
-.PHONY: help install dev run test test-cov lint format up down migrate migrate-down migrate-revision seed ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all test-recommendations docker-build clean
+.PHONY: help install dev run test test-cov lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all test-recommendations docker-build clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -59,9 +59,6 @@ migrate-down: ## Rollback one Alembic migration
 
 migrate-revision: ## Create new migration (use: make migrate-revision msg='description')
 	$(PYTHON) -m alembic revision --autogenerate -m "$(msg)"
-
-seed: ## Seed DB with providers, regions, instance types
-	$(PYTHON) scripts/seed.py
 
 ##@ Ingestion
 

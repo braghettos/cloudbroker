@@ -12,9 +12,6 @@ make up
 
 # Run migrations
 make migrate
-
-# Seed database (optional - adds sample data)
-make seed
 ```
 
 ### 2. Access the API

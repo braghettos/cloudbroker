@@ -90,9 +90,8 @@ cp .env.example .env
 # Start API + PostgreSQL
 make up
 
-# Run migrations + seed (3 providers, 5 regions, 20 instance types, pricing)
+# Run migrations
 make migrate
-make seed
 
 # API is at http://localhost:8000
 # Swagger UI at http://localhost:8000/docs
@@ -102,7 +101,6 @@ If you don't have a local Python env, run inside the container:
 
 ```bash
 docker compose exec api alembic upgrade head
-docker compose exec api python scripts/seed.py
 ```
 
 ### Local
@@ -112,7 +110,7 @@ python3 -m venv .venv && source .venv/bin/activate
 make install
 cp .env.example .env
 # Start PostgreSQL (e.g. docker compose up -d db)
-make migrate && make seed
+make migrate
 make dev
 ```
 
@@ -160,7 +158,6 @@ Run `make help` for the full list. Key targets:
 | `make up` | Start stack (docker compose up -d) |
 | `make down` | Stop stack |
 | `make migrate` | Run Alembic migrations (upgrade head) |
-| `make seed` | Seed DB with providers, regions, instance types |
 | `make install` | Install all dependencies (dev + ingest) |
 | `make dev` | Run API with hot-reload |
 | `make test` | Run pytest |
@@ -201,6 +198,20 @@ curl -s -X POST http://localhost:8000/api/recommendations \
     "max_price_eur_per_hour": 0.2,
     "limit": 5
   }'
+# Response (example):
+# {
+#   "recommendations": [
+#     {
+#       "instance_type_name": "cx23",
+#       "provider_slug": "hetzner",
+#       "region_slug": "fsn1",
+#       "vcpu": 2,
+#       "ram_gb": 4.0,
+#       "score": 0.9898,
+#       "explain": { "resource_fit": 1.0, "normalized_price": 0.9797, "region_is_eu": true }
+#     }
+#   ]
+# }
 ```
 
 ## Documentation

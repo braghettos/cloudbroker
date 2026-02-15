@@ -20,6 +20,10 @@ Parameters you send to `POST /api/recommendations`:
 
 Optional: **preferred_providers** (score boost), **purchase_model** (on_demand, spot), **limit** (how many results).
 
+**TCO (Total Cost of Ownership):** `data_source_provider`, `data_source_region`, `estimated_egress_gb_per_hour`, `max_tco_eur_per_hour`, `min_storage_gb`, `storage_type`, `include_public_ip`, `os_type`, `estimated_cross_az_gb_per_hour`.
+
+**GPU:** `min_gpu_count`, `gpu_type` (e.g. nvidia-t4).
+
 **Example:**
 
 ```json
@@ -47,7 +51,7 @@ Results are sorted by score descending. Top of the list = recommendation.
 
 ## The response
 
-Each item includes **provider_slug**, **region_slug**, **instance_type_name**, **price_eur_per_hour**, **score**, and optionally **explain** (resource_fit, normalized_price, weights, region_is_eu, etc.).
+Each item includes **provider_slug**, **region_slug**, **instance_type_name**, **price_eur_per_hour**, **score**, and **explain** (resource_fit, normalized_price, weights, region_is_eu, price_eur_per_hour, tco_eur_per_hour, egress_cost_eur_per_hour, storage_cost_eur_per_hour, etc. when TCO is used).
 
 ```json
 {
@@ -63,10 +67,19 @@ Each item includes **provider_slug**, **region_slug**, **instance_type_name**, *
     "normalized_price": 0.9797,
     "price_weight": 0.5,
     "fit_weight": 0.5,
-    "region_is_eu": true
+    "region_is_eu": true,
+    "price_eur_per_hour": 0.0048,
+    "tco_eur_per_hour": null,
+    "egress_cost_eur_per_hour": null,
+    "storage_cost_eur_per_hour": null,
+    "public_ip_cost_eur_per_hour": null,
+    "os_license_cost_eur_per_hour": null,
+    "cross_az_cost_eur_per_hour": null
   }
 }
 ```
+
+When TCO params are provided, `tco_eur_per_hour` and the cost components are populated.
 
 ---
 

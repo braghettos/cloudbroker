@@ -1,0 +1,23 @@
+# Public IP rates. eur_per_hour when allocated.
+# Often 0 when attached and in use; charged when idle (AWS) or always (GCP).
+
+aws:
+  eur_per_hour: 0.0046  # Elastic IP when attached free; idle ~$0.005/h
+
+azure:
+  eur_per_hour: 0.003  # Basic/Standard when in use
+
+gcp:
+  eur_per_hour: 0.004  # Static IP when in use
+
+hetzner:
+  eur_per_hour: 0.0
+
+digitalocean:
+  eur_per_hour: 0.0
+
+scaleway:
+  eur_per_hour: 0.0
+
+ovh:
+  eur_per_hour: 0.0

@@ -1,0 +1,37 @@
+# OS license surcharges (eur_per_vcpu_hour) for Windows, RHEL, etc.
+# Linux = 0 (no surcharge).
+
+aws:
+  linux: 0.0
+  windows: 0.022
+  rhel: 0.012
+
+azure:
+  linux: 0.0
+  windows: 0.02
+  rhel: 0.01
+
+gcp:
+  linux: 0.0
+  windows: 0.021
+  rhel: 0.011
+
+hetzner:
+  linux: 0.0
+  windows: 0.0  # Not typically offered
+  rhel: 0.0
+
+digitalocean:
+  linux: 0.0
+  windows: 0.018
+  rhel: 0.01
+
+scaleway:
+  linux: 0.0
+  windows: 0.02
+  rhel: 0.01
+
+ovh:
+  linux: 0.0
+  windows: 0.018
+  rhel: 0.01

@@ -234,7 +234,7 @@ async def ingest(
             logger.warning("Skipping size with invalid pricing", size_slug=slug)
             continue
 
-        # Convert USD to EUR (using stub rate if FX rates not available)
+        # Convert USD to EUR (using get_rate_to_eur fallback if FX rates not in DB)
         rate_usd_eur = await get_rate_to_eur(db, "USD")
         price_eur_per_hour = to_eur(price_hourly_usd, rate_usd_eur)
 

@@ -131,6 +131,10 @@ curl -X POST \
 - `allowed_providers` (optional): List of provider slugs to restrict results to (e.g. `["hetzner", "gcp", "scaleway"]`); when set, only offers from these providers are returned
 - `excluded_providers` (optional): List of provider slugs to exclude from results
 - `limit` (optional): Max recommendations to return (default: 10, max: 100)
+- **TCO**: `data_source_provider`, `data_source_region`, `estimated_egress_gb_per_hour`, `max_tco_eur_per_hour`
+- **Cost components**: `min_storage_gb`, `storage_type` (ssd/hdd/balanced), `include_public_ip`, `os_type` (linux/windows/rhel), `estimated_cross_az_gb_per_hour`
+- **GPU**: `min_gpu_count`, `gpu_type` (e.g. nvidia-t4, nvidia-a100)
+- **Multi-criteria scoring**: `cost_weight`, `performance_weight`, `reliability_weight`
 
 **Response** includes:
 - Ranked recommendations with scores
@@ -198,6 +202,20 @@ make ingest-hetzner
 make ingest-all
 ```
 
+### Cost Rate Ingestion
+
+For TCO-aware recommendations, ingest cost rates (egress, storage, public IP, OS license):
+
+```bash
+# Egress rates only (API for AWS/Azure/GCP, config for others)
+make ingest-egress
+
+# All cost rates (egress, storage, public IP, OS license) - costs only, no instances
+make ingest-all-costs
+```
+
+Individual cost ingestors: `make ingest-storage`, `make ingest-public-ip`, `make ingest-os-license`. See [docs/CONFIG_RATE_SOURCES.md](docs/CONFIG_RATE_SOURCES.md) for documentation links.
+
 ---
 
 ## 🧪 Testing
@@ -207,6 +225,14 @@ make ingest-all
 ```bash
 make test
 ```
+
+### Run Exhaustive Param Matrix
+
+```bash
+make test-exhaustive
+```
+
+Runs ~440 parametrized recommendation tests (full Cartesian product of base dimensions).
 
 ### Run Tests with Coverage
 

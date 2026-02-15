@@ -1,0 +1,52 @@
+# Block storage rates for providers without public pricing APIs.
+# Values: eur_per_gb_month. region_slug: null = provider-wide default.
+# Sources: provider pricing pages.
+#
+# hetzner: https://www.hetzner.com/storage/storage-box
+# digitalocean: https://docs.digitalocean.com/products/volumes/
+# scaleway: https://www.scaleway.com/en/pricing/
+# ovh: https://www.ovhcloud.com/en/public-cloud/prices/
+
+hetzner:
+  ssd:
+    region_slug: null
+    eur_per_gb_month: 0.06
+  hdd:
+    region_slug: null
+    eur_per_gb_month: 0.03
+  balanced:
+    region_slug: null
+    eur_per_gb_month: 0.05
+
+digitalocean:
+  ssd:
+    region_slug: null
+    eur_per_gb_month: 0.07
+  hdd:
+    region_slug: null
+    eur_per_gb_month: 0.04
+  balanced:
+    region_slug: null
+    eur_per_gb_month: 0.06
+
+scaleway:
+  ssd:
+    region_slug: null
+    eur_per_gb_month: 0.08
+  hdd:
+    region_slug: null
+    eur_per_gb_month: 0.025
+  balanced:
+    region_slug: null
+    eur_per_gb_month: 0.06
+
+ovh:
+  ssd:
+    region_slug: null
+    eur_per_gb_month: 0.065
+  hdd:
+    region_slug: null
+    eur_per_gb_month: 0.03
+  balanced:
+    region_slug: null
+    eur_per_gb_month: 0.05

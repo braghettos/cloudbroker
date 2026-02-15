@@ -17,7 +17,7 @@ Four entities form the core:
 - **InstanceType** — name, vCPU, RAM, architecture, family. Unique per provider.
 - **Price** — hourly price for an instance type in a region. Original currency and EUR-normalized. Append-only; the engine uses the latest price per (instance_type, region).
 
-**FxRate** — lookup for USD→EUR (and others) so recommendations are apples-to-apples. A stub rate is seeded if missing.
+**FxRate** — lookup for USD→EUR (and others) so recommendations are apples-to-apples. An in-memory fallback (0.92) is used when no rate exists in the DB.
 
 ```
 Provider --> Region

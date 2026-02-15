@@ -6,7 +6,7 @@ import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import InstanceType, Price, Provider, Region
+from app.models import EgressRate, InstanceType, OsLicenseRate, Price, Provider, PublicIpRate, Region, StorageRate
 from app.models.price import PurchaseModel
 from app.models.provider import ProviderType
 
@@ -67,6 +67,7 @@ async def ensure_instance_type(
     family: str | None = None,
     generation: str | None = None,
     arch: str | None = None,
+    gpu_count: int | None = None,
     metadata_json: str | None = None,
 ) -> InstanceType:
     """Get or create instance type by (provider_id, name) (idempotent)."""
@@ -82,6 +83,8 @@ async def ensure_instance_type(
             row.generation = generation
         if arch is not None:
             row.arch = arch
+        if gpu_count is not None:
+            row.gpu_count = gpu_count
         if metadata_json is not None:
             row.metadata_json = metadata_json
         return row
@@ -93,11 +96,122 @@ async def ensure_instance_type(
         family=family,
         generation=generation,
         arch=arch,
+        gpu_count=gpu_count,
         metadata_json=metadata_json,
     )
     db.add(it)
     await db.flush()
     return it
+
+
+async def ensure_egress_rate(
+    db: AsyncSession,
+    provider_slug: str,
+    egress_eur_per_gb: float,
+    free_tier_gb_per_month: float = 0.0,
+    cross_region_eur_per_gb: float | None = None,
+    cross_az_eur_per_gb: float | None = None,
+) -> EgressRate:
+    """Get or create egress rate by provider_slug (idempotent). Updates existing row."""
+    stmt = select(EgressRate).where(EgressRate.provider_slug == provider_slug).limit(1)
+    result = await db.execute(stmt)
+    row = result.scalars().first()
+    if row is not None:
+        row.egress_eur_per_gb = egress_eur_per_gb
+        row.free_tier_gb_per_month = free_tier_gb_per_month
+        row.cross_region_eur_per_gb = cross_region_eur_per_gb
+        row.cross_az_eur_per_gb = cross_az_eur_per_gb
+        return row
+    r = EgressRate(
+        provider_slug=provider_slug,
+        egress_eur_per_gb=egress_eur_per_gb,
+        free_tier_gb_per_month=free_tier_gb_per_month,
+        cross_region_eur_per_gb=cross_region_eur_per_gb,
+        cross_az_eur_per_gb=cross_az_eur_per_gb,
+    )
+    db.add(r)
+    await db.flush()
+    return r
+
+
+async def ensure_storage_rate(
+    db: AsyncSession,
+    provider_slug: str,
+    storage_type: str,
+    eur_per_gb_month: float,
+    region_slug: str | None = None,
+) -> StorageRate:
+    """Get or create storage rate (idempotent). Updates existing row."""
+    stmt = (
+        select(StorageRate)
+        .where(StorageRate.provider_slug == provider_slug)
+        .where(StorageRate.storage_type == storage_type)
+    )
+    if region_slug is not None:
+        stmt = stmt.where(StorageRate.region_slug == region_slug)
+    else:
+        stmt = stmt.where(StorageRate.region_slug.is_(None))
+    stmt = stmt.limit(1)
+    result = await db.execute(stmt)
+    row = result.scalars().first()
+    if row is not None:
+        row.eur_per_gb_month = eur_per_gb_month
+        return row
+    r = StorageRate(
+        provider_slug=provider_slug,
+        region_slug=region_slug,
+        storage_type=storage_type,
+        eur_per_gb_month=eur_per_gb_month,
+    )
+    db.add(r)
+    await db.flush()
+    return r
+
+
+async def ensure_public_ip_rate(
+    db: AsyncSession,
+    provider_slug: str,
+    eur_per_hour: float,
+) -> PublicIpRate:
+    """Get or create public IP rate by provider_slug (idempotent)."""
+    stmt = select(PublicIpRate).where(PublicIpRate.provider_slug == provider_slug).limit(1)
+    result = await db.execute(stmt)
+    row = result.scalars().first()
+    if row is not None:
+        row.eur_per_hour = eur_per_hour
+        return row
+    r = PublicIpRate(provider_slug=provider_slug, eur_per_hour=eur_per_hour)
+    db.add(r)
+    await db.flush()
+    return r
+
+
+async def ensure_os_license_rate(
+    db: AsyncSession,
+    provider_slug: str,
+    os_type: str,
+    eur_per_vcpu_hour: float,
+) -> OsLicenseRate:
+    """Get or create OS license rate (idempotent)."""
+    stmt = (
+        select(OsLicenseRate)
+        .where(OsLicenseRate.provider_slug == provider_slug)
+        .where(OsLicenseRate.os_type == os_type)
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    row = result.scalars().first()
+    if row is not None:
+        row.eur_per_vcpu_hour = eur_per_vcpu_hour
+        return row
+    r = OsLicenseRate(
+        provider_slug=provider_slug,
+        os_type=os_type,
+        eur_per_vcpu_hour=eur_per_vcpu_hour,
+    )
+    db.add(r)
+    await db.flush()
+    return r
 
 
 def _truncate_to_hour(ts: datetime.datetime) -> datetime.datetime:

@@ -5,7 +5,7 @@
 VENV_PYTHON := $(firstword $(wildcard .venv/bin/python .venv/bin/python3))
 PYTHON ?= $(if $(VENV_PYTHON),$(VENV_PYTHON),python3)
 
-.PHONY: help install dev run test test-cov lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all test-recommendations docker-build clean
+.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations docker-build clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -23,11 +23,14 @@ dev: ## Run uvicorn with hot-reload
 run: ## Run uvicorn (production mode)
 	$(PYTHON) -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-test: ## Run pytest
-	$(PYTHON) -m pytest
+test: ## Run pytest (excludes exhaustive matrix)
+	$(PYTHON) -m pytest -m "not exhaustive"
 
-test-cov: ## Run pytest with coverage
-	$(PYTHON) -m pytest --cov=app --cov=connectors --cov=apps --cov-report=term-missing --cov-report=html
+test-exhaustive: ## Run full recommendation param matrix (~440 tests)
+	$(PYTHON) -m pytest -m exhaustive tests/test_recommendations_param_matrix.py -v
+
+test-cov: ## Run pytest with coverage (excludes exhaustive matrix)
+	$(PYTHON) -m pytest -m "not exhaustive" --cov=app --cov=connectors --cov=apps --cov-report=term-missing --cov-report=html
 
 lint: ## Run ruff linter
 	$(PYTHON) -m ruff check app tests connectors apps
@@ -37,6 +40,9 @@ format: ## Run ruff formatter
 
 test-recommendations: ## Test recommendations API endpoint
 	@./scripts/test_recommendations.sh
+
+test-e2e: ## Run e2e tests (requires: make up, make migrate, ingest, ingest --egress)
+	$(PYTHON) -m pytest tests/test_e2e_recommendations_tco.py -v -m e2e
 
 ##@ Docker
 
@@ -83,6 +89,9 @@ ingest-azure: ## Ingest Azure (Retail Prices API, no auth required)
 ingest-azure-quick: ## Ingest Azure single region (westeurope)
 	$(PYTHON) -m apps.ingestor ingest --provider azure --quick
 
+ingest-azure-egress: ## Ingest Azure plus egress rates
+	$(PYTHON) -m apps.ingestor ingest --provider azure --egress
+
 ingest-azure-spot: ## Ingest Azure Spot VM prices (all EU regions)
 	$(PYTHON) -m apps.ingestor ingest --provider azure --purchase-model spot
 
@@ -100,6 +109,21 @@ ingest-ovh: ## Ingest OVH (requires OVH keys)
 
 ingest-all: ## Ingest all providers
 	$(PYTHON) -m apps.ingestor ingest --provider all
+
+ingest-egress: ## Ingest egress rates for all 7 providers (API + config)
+	$(PYTHON) -m apps.ingestor ingest --provider all --egress
+
+ingest-storage: ## Ingest storage rates for all providers (costs only, no instances)
+	$(PYTHON) -m apps.ingestor ingest --provider all --storage --costs-only
+
+ingest-public-ip: ## Ingest public IP rates for all providers (costs only)
+	$(PYTHON) -m apps.ingestor ingest --provider all --public-ip --costs-only
+
+ingest-os-license: ## Ingest OS license rates for all providers (costs only)
+	$(PYTHON) -m apps.ingestor ingest --provider all --os-license --costs-only
+
+ingest-all-costs: ## Ingest egress, storage, public IP, OS license rates (costs only)
+	$(PYTHON) -m apps.ingestor ingest --provider all --all-costs --costs-only
 
 ##@ Cleanup
 

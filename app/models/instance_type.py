@@ -24,6 +24,7 @@ class InstanceType(Base):
     vcpu: Mapped[int] = mapped_column(Integer, nullable=False)
     ram_gb: Mapped[float] = mapped_column(Float, nullable=False)
     arch: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    gpu_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     provider: Mapped["Provider"] = relationship("Provider", back_populates="instance_types")

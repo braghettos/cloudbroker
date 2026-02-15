@@ -1,0 +1,33 @@
+# Network (egress) rates for providers without public pricing APIs.
+# Sources: provider pricing pages. Update manually when rates change.
+# All values in EUR. Ingress is free (0) for all cloud providers.
+# cross_az_eur_per_gb: same region, different AZ - often similar to cross_region.
+#
+# hetzner: https://docs.hetzner.com/general/others/billing/
+# digitalocean: https://docs.digitalocean.com/platform/billing/bandwidth/
+# scaleway: https://www.scaleway.com/en/pricing/
+# ovh: https://www.ovhcloud.com/en/public-cloud/prices/
+
+hetzner:
+  egress_eur_per_gb: 0.001
+  free_tier_gb_per_month: 20480
+  cross_region_eur_per_gb: 0.001
+  cross_az_eur_per_gb: 0.001
+
+digitalocean:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0  # 500 GB pooled per account, not per-instance
+  cross_region_eur_per_gb: 0.005
+  cross_az_eur_per_gb: 0.005
+
+scaleway:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 20480
+  cross_region_eur_per_gb: 0.005
+  cross_az_eur_per_gb: 0.005
+
+ovh:
+  egress_eur_per_gb: 0.005
+  free_tier_gb_per_month: 20480
+  cross_region_eur_per_gb: 0.002
+  cross_az_eur_per_gb: 0.002

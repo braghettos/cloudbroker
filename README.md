@@ -58,7 +58,7 @@ graph TB
 
 | Aspect | CloudBroker | Infracost Cloud Pricing API | CloudPrice | AWS / GCP / Azure Price APIs |
 |--------|-------------|-----------------------------|------------|-----------------------------|
-| **Providers** | 7: AWS, GCP, Azure, Hetzner, Scaleway, DO, OVH | 3: AWS, Azure, GCP | 3: AWS, Azure, GCP | 1 per API |
+| **Providers** | 7: AWS, GCP, Azure, Hetzner, Scaleway, DigitalOcean, OVH | 3: AWS, Azure, GCP | 3: AWS, Azure, GCP | 1 per API |
 | **Hosting** | Self-hosted | Hosted (SaaS, API key) | Hosted (SaaS) | You call provider directly |
 | **Recommendation** | Ranked by cost + fit, one request | GraphQL query, Terraform-focused | Instance recommendations | Raw listings |
 | **Currency** | Normalised to EUR (FX) | Per-provider | Per-provider | Per-provider |
@@ -72,6 +72,7 @@ CloudBroker targets **self-hosted** multi-cloud cost selection: 7 providers (inc
 - **EUR-normalised pricing** &mdash; all prices converted via FX rates
 - **Dual scoring modes** &mdash; legacy (price + fit) or multi-criteria (cost, performance, reliability)
 - **Transparent ranking** &mdash; every recommendation includes an `explain` block
+- **TCO-aware recommendations** &mdash; when data source and estimated egress are provided, includes egress, storage, public IP, OS license, and cross-AZ in total cost
 - **Price analytics** &mdash; change detection and trend analysis over historical data
 - **Prometheus metrics** &mdash; `/api/metrics` endpoint
 - **Idempotent ingestion** &mdash; safe to re-run at any time
@@ -140,7 +141,7 @@ apps/
   ingestor/            # CLI for provider data ingestion
 connectors/            # Provider-specific pricing connectors
 migrations/            # Alembic migrations
-scripts/               # Seed and utility scripts
+scripts/               # Utility scripts (e.g. test_recommendations.sh)
 tests/                 # Pytest test suite
 docs/                  # Additional documentation
 docker-compose.yml
@@ -179,6 +180,12 @@ Run `make help` for the full list. Key targets:
 | `make ingest-aws` | Ingest AWS EC2 pricing |
 | `make ingest-scaleway` | Ingest Scaleway pricing |
 | `make ingest-hetzner` | Ingest Hetzner pricing |
+| `make ingest-egress` | Ingest egress rates for all 7 providers |
+| `make ingest-storage` | Ingest storage rates (costs only) |
+| `make ingest-public-ip` | Ingest public IP rates (costs only) |
+| `make ingest-os-license` | Ingest OS license rates (costs only) |
+| `make ingest-all-costs` | Ingest all cost rates (egress, storage, public IP, OS license) |
+| `make test-exhaustive` | Run full recommendation param matrix (~440 tests) |
 | `make clean` | Remove caches and build artifacts |
 
 ## API Examples
@@ -220,10 +227,19 @@ curl -s -X POST http://localhost:8000/api/recommendations \
 #       "vcpu": 2,
 #       "ram_gb": 4.0,
 #       "score": 0.9898,
-#       "explain": { "resource_fit": 1.0, "normalized_price": 0.9797, "region_is_eu": true }
+#       "explain": {
+#         "resource_fit": 1.0,
+#         "normalized_price": 0.9797,
+#         "region_is_eu": true,
+#         "price_eur_per_hour": 0.0048,
+#         "tco_eur_per_hour": null,
+#         "egress_cost_eur_per_hour": null
+#       }
 #     }
 #   ]
 # }
+# When TCO params are provided (data_source_provider, data_source_region, estimated_egress_gb_per_hour),
+# explain includes tco_eur_per_hour, egress_cost_eur_per_hour, storage_cost_eur_per_hour, etc.
 ```
 
 ## Documentation

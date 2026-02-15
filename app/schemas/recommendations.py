@@ -106,6 +106,55 @@ class RecommendationRequest(BaseModel):
         le=1.0,
         description="Optional override for reliability weight in multi-criteria scoring (0-1).",
     )
+    data_source_provider: str | None = Field(
+        default=None,
+        description="Provider where data/dependencies live (e.g. 'gcp'). Used for TCO: same provider+region = zero egress cost.",
+    )
+    data_source_region: str | None = Field(
+        default=None,
+        description="Region where data/dependencies live (e.g. 'us-central1'). Used for TCO calculation.",
+    )
+    estimated_egress_gb_per_hour: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Expected egress from new instance in GB/hour. When set with data_source_*, TCO includes egress cost.",
+    )
+    max_tco_eur_per_hour: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Optional max total cost of ownership (instance + egress + storage + etc) when TCO is used. Filters candidates by tco <= max.",
+    )
+    min_storage_gb: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Minimum root/attached storage in GB. When set, TCO includes storage cost.",
+    )
+    storage_type: str | None = Field(
+        default=None,
+        description="Storage type: ssd, hdd, balanced. Default ssd when min_storage_gb set.",
+    )
+    include_public_ip: bool | None = Field(
+        default=None,
+        description="Whether instance needs public IP. When True, TCO includes public IP cost.",
+    )
+    os_type: str | None = Field(
+        default=None,
+        description="OS type: linux, windows, rhel. Default linux (no surcharge).",
+    )
+    estimated_cross_az_gb_per_hour: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Expected cross-AZ traffic (same region, different AZ) in GB/hour for TCO.",
+    )
+    min_gpu_count: int | None = Field(
+        default=None,
+        ge=0,
+        description="Minimum GPU count. Filters to instance types with gpu_count >= this.",
+    )
+    gpu_type: str | None = Field(
+        default=None,
+        description="GPU type filter: nvidia-t4, nvidia-a100, etc. When set with min_gpu_count.",
+    )
 
 
 class RecommendationExplain(BaseModel):
@@ -147,6 +196,30 @@ class RecommendationExplain(BaseModel):
     )
     price_eur_per_hour: float = Field(..., description="Price used (EUR/h)")
     region_is_eu: bool = Field(..., description="Whether the region is EU")
+    tco_eur_per_hour: float | None = Field(
+        default=None,
+        description="Total cost of ownership (instance + egress) when TCO placement context is provided.",
+    )
+    egress_cost_eur_per_hour: float | None = Field(
+        default=None,
+        description="Estimated egress cost component of TCO (EUR/h). Present when TCO is computed.",
+    )
+    storage_cost_eur_per_hour: float | None = Field(
+        default=None,
+        description="Storage cost component of TCO (EUR/h).",
+    )
+    public_ip_cost_eur_per_hour: float | None = Field(
+        default=None,
+        description="Public IP cost component of TCO (EUR/h).",
+    )
+    os_license_cost_eur_per_hour: float | None = Field(
+        default=None,
+        description="OS license surcharge component of TCO (EUR/h).",
+    )
+    cross_az_cost_eur_per_hour: float | None = Field(
+        default=None,
+        description="Cross-AZ traffic cost component of TCO (EUR/h).",
+    )
 
 
 class RecommendationItem(BaseModel):

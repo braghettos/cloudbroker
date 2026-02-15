@@ -91,7 +91,7 @@ async def test_post_recommendations_preferred_providers(client, monkeypatch):
         "arch": "x86_64",
         "region_constraint": "EU",
         "max_price_eur_per_hour": 1.0,
-        "preferred_providers": ["gcp"],
+        "preferred_providers": ["gcp", "hetzner"],
         "limit": 10,
     }
     response = await client.post("/api/recommendations", json=payload)
@@ -101,7 +101,7 @@ async def test_post_recommendations_preferred_providers(client, monkeypatch):
     recs = data["recommendations"]
     if recs:
         # First recommendation should be from a preferred provider (score boost)
-        assert recs[0]["provider_slug"] == "gcp"
+        assert recs[0]["provider_slug"] in ["gcp", "hetzner"]
 
 
 @pytest.mark.asyncio

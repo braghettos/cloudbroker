@@ -26,7 +26,7 @@ It is the pricing backend for [Cloudburst Autoscaler](https://github.com/braghet
 
 ## Data Model
 
-Five core entities form a hierarchy from provider down to individual price records:
+Core entities form a hierarchy from provider down to individual price records. Cost-rate tables (keyed by `provider_slug`) support TCO calculation:
 
 ```
 Provider ──1:N──> Region
@@ -34,6 +34,9 @@ Provider ──1:N──> Region
     └──1:N──> InstanceType ──1:N──> Price <──N:1── Region
                                       │
                                    FxRate (lookup)
+
+Cost rates (by provider_slug):
+  EgressRate, StorageRate, PublicIpRate, OsLicenseRate
 ```
 
 ### Provider
@@ -63,6 +66,7 @@ A VM size offered by a provider. Key fields:
 - `name`: Provider-specific name (e.g. `n1-standard-4`, `cx23`, `DEV1-S`)
 - `vcpu`, `ram_gb`: Compute specs
 - `arch`: `x86_64` or `arm64`
+- `gpu_count`: Optional GPU count for GPU instance types
 - `family`: Instance family (e.g. `N1`, `C2`, `CAX11`)
 - `metadata_json`: Optional JSON for provider-specific details
 
@@ -88,7 +92,7 @@ Exchange rate lookup table for currency normalization:
 - `rate`: Conversion factor
 - `effective_date`: When the rate applies
 
-A stub rate of `0.92` for USD->EUR is seeded automatically if no rate exists.
+When no fx_rates row exists, an in-memory fallback of `0.92` for USD->EUR is used. Load real FX data via a dedicated ingest path when available.
 
 ## Recommendation Engine
 
@@ -115,6 +119,7 @@ allowed: [gcp,hetzner]    AND provider IN (...)              5. Sort by score DE
 4. **Region constraint**: When `EU`, adds `WHERE is_eu = true`
 5. **Provider filter**: `allowed_providers` (whitelist) and `excluded_providers` (blacklist)
 6. **Latest price**: Subquery selects `MAX(timestamp)` per `(instance_type_id, region_id)` to use only the most recent price
+7. **GPU filter**: When `min_gpu_count` is set, require `gpu_count >= min_gpu_count`; when `gpu_type` is set, filter by instance type name substring match
 
 Architecture values are normalized: `amd64` -> `x86_64`, `aarch64` -> `arm64`.
 
@@ -162,6 +167,22 @@ After the base score is computed, several adjustments are applied:
 | **Spot availability** | `purchase_model=spot` | Bonus based on instance size and provider type |
 | **Interruption risk** | `purchase_model=spot` | `score × (1.0 - risk × 0.3)` penalty |
 
+### TCO (Total Cost of Ownership)
+
+When cost parameters are provided, the engine computes total cost of ownership and uses it for scoring and filtering. Optional parameters include:
+
+- `data_source_provider`, `data_source_region`: Where data/dependencies live (same provider+region = zero egress)
+- `estimated_egress_gb_per_hour`: Egress from new instance to data source
+- `min_storage_gb`, `storage_type`: Block storage (ssd, hdd, balanced)
+- `include_public_ip`: Whether instance needs a public IP
+- `os_type`: Linux (default, no surcharge), windows, or rhel
+- `estimated_cross_az_gb_per_hour`: Same-region cross-AZ traffic
+- `max_tco_eur_per_hour`: Filter candidates by `tco <= max`
+
+Formula: `tco = instance_price + egress_cost + storage_cost + public_ip_cost + os_license_cost + cross_az_cost`
+
+The `explain` block includes `tco_eur_per_hour`, `egress_cost_eur_per_hour`, `storage_cost_eur_per_hour`, `public_ip_cost_eur_per_hour`, `os_license_cost_eur_per_hour`, and `cross_az_cost_eur_per_hour` when TCO is computed.
+
 ### Response
 
 Each recommendation includes an `explain` block with all scoring components, making the ranking transparent:
@@ -178,10 +199,18 @@ Each recommendation includes an `explain` block with all scoring components, mak
     "price_weight": 0.5,
     "fit_weight": 0.5,
     "price_eur_per_hour": 0.0048,
-    "region_is_eu": true
+    "region_is_eu": true,
+    "tco_eur_per_hour": null,
+    "egress_cost_eur_per_hour": null,
+    "storage_cost_eur_per_hour": null,
+    "public_ip_cost_eur_per_hour": null,
+    "os_license_cost_eur_per_hour": null,
+    "cross_az_cost_eur_per_hour": null
   }
 }
 ```
+
+When TCO params are provided, `tco_eur_per_hour` and the cost components are populated.
 
 ## Ingestion Pipeline
 
@@ -195,7 +224,6 @@ make ingest-hetzner
         v
 apps/ingestor/cli.py          (CLI entry point, Click)
         │
-        ├── ensure_stub_fx_rates()     (seed USD→EUR if missing)
         ├── ensure_provider()          (upsert provider row)
         │
         v
@@ -212,10 +240,13 @@ connectors/hetzner.py         (provider-specific API client)
 ### CLI
 
 ```bash
-python -m apps.ingestor ingest --provider <name> [--only-eu] [--quick] [--region <slug>]
+python -m apps.ingestor ingest --provider <name> [--only-eu] [--quick] [--region <slug>] \
+  [--egress] [--storage] [--public-ip] [--os-license] [--all-costs] [--costs-only] [--egress-only]
 ```
 
 Supported providers: `gcp`, `hetzner`, `aws`, `azure`, `digitalocean`, `scaleway`, `ovh`, `all`.
+
+Cost flags: `--egress` (with instance ingest), `--storage`, `--public-ip`, `--os-license`, `--all-costs`. Use `--costs-only` to skip instance/price ingestion and only ingest cost rates; use `--egress-only` to ingest only egress rates for all providers.
 
 ### Idempotency
 
@@ -250,6 +281,21 @@ All prices are stored with their original currency. EUR normalization happens at
 | DigitalOcean | DO API | API token | USD |
 | Scaleway | Scaleway API | Access key + secret | EUR |
 | OVH | OVH API | App key + secret | EUR |
+
+### Cost Rate Ingestion
+
+In addition to instance and price data, CloudBroker ingests cost rates for TCO calculation:
+
+| Table | Purpose |
+|-------|---------|
+| `egress_rates` | Egress (internet), cross-region, cross-AZ pricing per GB |
+| `storage_rates` | Block storage (ssd, hdd, balanced) per GB-month |
+| `public_ip_rates` | Public IP cost per hour when allocated |
+| `os_license_rates` | OS surcharge (Windows, RHEL) per vCPU-hour |
+
+**API-based** (AWS, Azure, GCP): Storage and egress connectors fetch from provider pricing APIs. **Config-based** (Hetzner, DigitalOcean, Scaleway, OVH): YAML config files in `connectors/` (see [CONFIG_RATE_SOURCES.md](CONFIG_RATE_SOURCES.md) for documentation links).
+
+Run `make ingest-egress` or `make ingest-all-costs` to populate cost rates.
 
 ## Price Analytics
 

@@ -54,6 +54,18 @@ graph TB
 3. **Analyse** &mdash; Price-analytics endpoints detect changes and trends across the stored price history.
 4. **Integrate** &mdash; [Cloudburst Autoscaler](https://github.com/braghettos/cloudburst-autoscaler) calls `POST /api/recommendations` to decide which VM to provision when Kubernetes pods are unschedulable.
 
+## CloudBroker vs alternatives
+
+| Aspect | CloudBroker | Infracost Cloud Pricing API | CloudPrice | AWS / GCP / Azure Price APIs |
+|--------|-------------|-----------------------------|------------|-----------------------------|
+| **Providers** | 7: AWS, GCP, Azure, Hetzner, Scaleway, DO, OVH | 3: AWS, Azure, GCP | 3: AWS, Azure, GCP | 1 per API |
+| **Hosting** | Self-hosted | Hosted (SaaS, API key) | Hosted (SaaS) | You call provider directly |
+| **Recommendation** | Ranked by cost + fit, one request | GraphQL query, Terraform-focused | Instance recommendations | Raw listings |
+| **Currency** | Normalised to EUR (FX) | Per-provider | Per-provider | Per-provider |
+| **Primary use** | Autoscaler / burst cost selection | Terraform cost estimation | Pricing lookup, dashboards | Single-cloud billing |
+
+CloudBroker targets **self-hosted** multi-cloud cost selection: 7 providers (including EU-focused Hetzner, Scaleway, OVH), one recommendation endpoint, EUR-normalised. Infracost and CloudPrice are hosted and focus on the big three; provider APIs are single-cloud.
+
 ## Features
 
 - **7 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean

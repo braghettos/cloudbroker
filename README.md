@@ -66,6 +66,17 @@ graph TB
 
 CloudBroker targets **self-hosted** multi-cloud cost selection: 7 providers (including EU-focused Hetzner, Scaleway, OVH), one recommendation endpoint, EUR-normalised. Infracost and CloudPrice are hosted and focus on the big three; provider APIs are single-cloud.
 
+## Use cases
+
+| Use case | Description |
+|----------|-------------|
+| **Autoscaler & burst cost selection** | Primary: [Cloudburst Autoscaler](https://github.com/braghettos/cloudburst-autoscaler) calls `POST /api/recommendations` to pick the cheapest VM when bursting Kubernetes nodes. |
+| **Multi-cloud price comparison** | Compare instance prices across AWS, GCP, Azure, Hetzner, Scaleway, DigitalOcean, OVH in one query. EUR-normalised. |
+| **TCO modelling** | With data source and egress estimates, get total cost including egress, storage, public IP, OS license. Better than instance-only pricing. |
+| **Budget planning** | "What's the cheapest 4 vCPU / 8 GB RAM in EU?" for capacity planning or migration decisions. |
+| **Price analytics** | Track price changes and trends over time via `/api/price-analytics`. |
+| **Custom automation** | Any script or controller can call `/api/recommendations`; not limited to Cloudburst. |
+
 ## Features
 
 - **7 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean

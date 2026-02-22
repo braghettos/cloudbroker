@@ -125,6 +125,9 @@ ingest-os-license: ## Ingest OS license rates for all providers (costs only)
 ingest-all-costs: ## Ingest egress, storage, public IP, OS license rates (costs only)
 	$(PYTHON) -m apps.ingestor ingest --provider all --all-costs --costs-only
 
+seed-dr-hetzner-first: ## Seed DB so Hetzner ranks first (for DR failover test)
+	$(PYTHON) scripts/seed_dr_hetzner_first.py
+
 ##@ Cleanup
 
 clean: ## Remove caches and build artifacts

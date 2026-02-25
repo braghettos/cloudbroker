@@ -150,7 +150,7 @@ app/
   services/            # Business logic (recommendations, ingestion, analytics)
 apps/
   ingestor/            # CLI for provider data ingestion
-connectors/            # Provider-specific pricing connectors
+connectors/            # Provider-specific pricing connectors (GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean)
 migrations/            # Alembic migrations
 scripts/               # Utility scripts (e.g. test_recommendations.sh)
 tests/                 # Pytest test suite
@@ -188,15 +188,27 @@ Run `make help` for the full list. Key targets:
 | `make lint` | Run ruff linter |
 | `make ingest-all` | Ingest pricing from all providers |
 | `make ingest-gcp` | Ingest GCP Billing Catalog |
+| `make ingest-gcp-machines` | Compute GCP machine type prices from unit prices |
 | `make ingest-aws` | Ingest AWS EC2 pricing |
+| `make ingest-aws-quick` | Ingest AWS single region (eu-west-1) |
+| `make ingest-azure` | Ingest Azure Retail Prices API |
+| `make ingest-azure-quick` | Ingest Azure single region (westeurope) |
+| `make ingest-azure-egress` | Ingest Azure plus egress rates |
+| `make ingest-azure-spot` | Ingest Azure Spot VM prices (all EU regions) |
+| `make ingest-azure-spot-quick` | Ingest Azure Spot VM prices (westeurope only) |
 | `make ingest-scaleway` | Ingest Scaleway pricing |
-| `make ingest-hetzner` | Ingest Hetzner pricing |
+| `make ingest-hetzner` | Ingest Hetzner Cloud pricing |
+| `make ingest-digitalocean` | Ingest DigitalOcean pricing |
+| `make ingest-ovh` | Ingest OVH Cloud pricing |
 | `make ingest-egress` | Ingest egress rates for all 7 providers |
 | `make ingest-storage` | Ingest storage rates (costs only) |
 | `make ingest-public-ip` | Ingest public IP rates (costs only) |
 | `make ingest-os-license` | Ingest OS license rates (costs only) |
 | `make ingest-all-costs` | Ingest all cost rates (egress, storage, public IP, OS license) |
+| `make seed-dr-hetzner-first` | Seed DB so Hetzner ranks first (for DR failover test) |
 | `make test-exhaustive` | Run full recommendation param matrix (~440 tests) |
+| `make migrate-down` | Rollback one Alembic migration |
+| `make migrate-revision` | Create new migration (use: `make migrate-revision msg='description'`) |
 | `make clean` | Remove caches and build artifacts |
 
 ## API Examples

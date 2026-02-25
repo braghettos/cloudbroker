@@ -209,8 +209,19 @@ async def test_recommendations_provider_filter_variants(client, filter_mode, pay
     "tco_mode,payload_extras",
     [
         ("none", {}),
-        ("with_egress", {"data_source_provider": "gcp", "data_source_region": "europe-west1", "estimated_egress_gb_per_hour": 1.0}),
-        ("with_max_tco", {"data_source_provider": "gcp", "data_source_region": "europe-west1", "estimated_egress_gb_per_hour": 1.0, "max_tco_eur_per_hour": 1.0}),
+        (
+            "with_egress",
+            {"data_source_provider": "gcp", "data_source_region": "europe-west1", "estimated_egress_gb_per_hour": 1.0},
+        ),
+        (
+            "with_max_tco",
+            {
+                "data_source_provider": "gcp",
+                "data_source_region": "europe-west1",
+                "estimated_egress_gb_per_hour": 1.0,
+                "max_tco_eur_per_hour": 1.0,
+            },
+        ),
     ],
     ids=["none", "with_egress", "with_max_tco"],
 )

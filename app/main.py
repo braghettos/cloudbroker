@@ -4,9 +4,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.api import api_router
 from app.api.health import router as health_router
@@ -24,10 +25,8 @@ limiter = Limiter(
 
 
 # Rate limit exceeded handler
-def rate_limit_handler(request: Request, exc: RateLimitExceeded):
-    """Custom handler for rate limit exceeded."""
-    from fastapi.responses import JSONResponse
-
+def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Return 429 when rate limit is exceeded."""
     return JSONResponse(
         status_code=429,
         content={
@@ -47,8 +46,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Cloudbroker",
-    description="Production-ready Python backend",
+    title="CloudBroker",
+    description="Multi-cloud compute pricing marketplace. Ingest instance data from 7 providers, normalise prices to EUR, and expose a recommendation engine for the cheapest instances matching constraints.",
     version="0.1.0",
     lifespan=lifespan,
 )

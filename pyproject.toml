@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cloudbroker"
 version = "0.1.0"
-description = "Production-ready Python backend with FastAPI and PostgreSQL"
+description = "Multi-cloud compute pricing marketplace: 7 providers, EUR-normalised prices, recommendation engine for Cloudburst Autoscaler"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

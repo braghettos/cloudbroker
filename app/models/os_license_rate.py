@@ -12,9 +12,7 @@ class OsLicenseRate(Base):
     """OS surcharge per vCPU-hour for licensed images."""
 
     __tablename__ = "os_license_rates"
-    __table_args__ = (
-        UniqueConstraint("provider_slug", "os_type", name="uq_os_license_rates_provider_os"),
-    )
+    __table_args__ = (UniqueConstraint("provider_slug", "os_type", name="uq_os_license_rates_provider_os"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     provider_slug: Mapped[str] = mapped_column(String(64), nullable=False, index=True)

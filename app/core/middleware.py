@@ -2,7 +2,7 @@
 
 import time
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -13,7 +13,7 @@ from app.core.metrics import http_request_duration_seconds, http_requests_total
 logger = get_logger(__name__)
 
 
-def mask_sensitive_headers(headers: dict) -> dict:
+def mask_sensitive_headers(headers: dict[str, str]) -> dict[str, str]:
     """Mask sensitive headers (API keys, tokens) in logs."""
     sensitive_keys = {"x-api-key", "authorization", "cookie"}
     masked = {}
@@ -81,7 +81,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception as exc:
+        except Exception:
             # Calculate duration
             duration_seconds = time.time() - start_time
             duration_ms = duration_seconds * 1000
@@ -104,6 +104,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 method=request.method,
                 path=request.url.path,
                 duration_ms=round(duration_ms, 2),
-                exc_info=exc,
+                exc_info=True,
             )
             raise

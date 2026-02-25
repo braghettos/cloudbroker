@@ -126,9 +126,7 @@ async def test_recommendations_without_tco_has_no_tco_fields(skip_unless_api):
         explain = rec.get("explain", {})
         tco = explain.get("tco_eur_per_hour")
         egress = explain.get("egress_cost_eur_per_hour")
-        assert tco is None or egress is None, (
-            "Without TCO context, tco/egress should be null"
-        )
+        assert tco is None or egress is None, "Without TCO context, tco/egress should be null"
 
 
 @pytest.mark.e2e
@@ -188,10 +186,7 @@ async def test_tco_same_provider_region_has_zero_egress_cost(skip_unless_api, da
     assert r.status_code == 200
     data = r.json()
     recs = data.get("recommendations", [])
-    matching = [
-        rec for rec in recs
-        if rec.get("provider_slug") == ds_provider and rec.get("region_slug") == ds_region
-    ]
+    matching = [rec for rec in recs if rec.get("provider_slug") == ds_provider and rec.get("region_slug") == ds_region]
     if not matching:
         pytest.skip("No recommendation matches data source (single-provider catalog)")
     for rec in matching:
@@ -224,10 +219,7 @@ async def test_tco_cross_provider_has_positive_egress_cost(skip_unless_api, data
     assert r.status_code == 200
     data = r.json()
     recs = data.get("recommendations", [])
-    cross_provider = [
-        rec for rec in recs
-        if rec.get("provider_slug") != ds_provider
-    ]
+    cross_provider = [rec for rec in recs if rec.get("provider_slug") != ds_provider]
     if not cross_provider:
         pytest.skip("No cross-provider recommendations (single-provider catalog)")
     for rec in cross_provider:

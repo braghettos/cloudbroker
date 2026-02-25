@@ -309,9 +309,7 @@ class RecommendationService:
         use_storage_tco = req.min_storage_gb is not None and req.min_storage_gb > 0
         use_public_ip_tco = req.include_public_ip is True
         use_os_tco = req.os_type is not None and req.os_type.lower() != "linux"
-        use_cross_az_tco = (
-            req.estimated_cross_az_gb_per_hour is not None and req.estimated_cross_az_gb_per_hour > 0
-        )
+        use_cross_az_tco = req.estimated_cross_az_gb_per_hour is not None and req.estimated_cross_az_gb_per_hour > 0
         use_tco = use_egress_tco or use_storage_tco or use_public_ip_tco or use_os_tco or use_cross_az_tco
 
         storage_type = (req.storage_type or "ssd").lower().strip()
@@ -391,14 +389,7 @@ class RecommendationService:
                     if use_cross_az_tco
                     else 0.0
                 )
-                tco = (
-                    c.price_per_hour
-                    + egress_cost
-                    + storage_cost
-                    + public_ip_cost
-                    + os_license_cost
-                    + cross_az_cost
-                )
+                tco = c.price_per_hour + egress_cost + storage_cost + public_ip_cost + os_license_cost + cross_az_cost
                 candidate_tcos[i] = (
                     tco,
                     egress_cost,
@@ -489,7 +480,18 @@ class RecommendationService:
             is_spot = False
 
         scored: list[
-            tuple[float, float, float, float | None, float | None, float | None, float | None, _Candidate, float | None, float | None]
+            tuple[
+                float,
+                float,
+                float,
+                float | None,
+                float | None,
+                float | None,
+                float | None,
+                _Candidate,
+                float | None,
+                float | None,
+            ]
         ] = []
         for i, c in enumerate(candidates):
             resource_fit = min(1.0, req.min_vcpu / c.vcpu) * min(1.0, req.min_ram_gb / c.ram_gb)

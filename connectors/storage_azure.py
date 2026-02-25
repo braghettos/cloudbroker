@@ -54,7 +54,11 @@ async def _fetch_azure_disk_items() -> list[dict]:
 
 def _extract_disk_rates(items: list[dict]) -> list[tuple[str, float]]:
     """Extract (storage_type, usd_per_gb_month) from Azure items."""
-    gb_items = [i for i in items if "gb" in (i.get("unitOfMeasure") or "").lower() and "month" in (i.get("unitOfMeasure") or "").lower()]
+    gb_items = [
+        i
+        for i in items
+        if "gb" in (i.get("unitOfMeasure") or "").lower() and "month" in (i.get("unitOfMeasure") or "").lower()
+    ]
     paid = [i for i in gb_items if (i.get("retailPrice") or 0) > 0]
     seen: set[str] = set()
     result: list[tuple[str, float]] = []

@@ -61,10 +61,7 @@ async def fetch_egress_rates_azure() -> tuple[float, float, float | None]:
     """
     params = {
         "api-version": AZURE_API_VERSION,
-        "$filter": (
-            f"serviceName eq 'Bandwidth' and armRegionName eq '{_REP_REGION}' "
-            "and type eq 'Consumption'"
-        ),
+        "$filter": (f"serviceName eq 'Bandwidth' and armRegionName eq '{_REP_REGION}' and type eq 'Consumption'"),
         "$top": 100,
     }
     all_items: list[dict] = []
@@ -97,7 +94,8 @@ async def fetch_egress_rates_azure() -> tuple[float, float, float | None]:
     usd_per_gb, free_gb = tier_data
     # Cross-region: fetch Inter-Region Data Transfer for same region
     cross_items = [
-        i for i in all_items
+        i
+        for i in all_items
         if "inter-region data transfer" in (i.get("meterName") or "").lower()
         and "1 gb" in (i.get("unitOfMeasure") or "").lower()
         and (i.get("retailPrice") or 0) > 0

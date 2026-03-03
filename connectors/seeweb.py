@@ -6,11 +6,9 @@ import os
 from decimal import Decimal
 
 import httpx
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.models import Region
 from app.models.price import PurchaseModel
 from app.models.provider import ProviderType
 from app.services.ingestion import (
@@ -144,7 +142,6 @@ async def ingest(
         cpu = int(plan.get("cpu") or 0)
         ram_mb = int(plan.get("ram") or 0)
         ram_gb = float(ram_mb) / 1024.0 if ram_mb else 0.0
-        disk_gb = int(plan.get("disk") or 0)
 
         eur_per_hour = _price_per_hour_eur(plan)
         if eur_per_hour is None or eur_per_hour <= 0:

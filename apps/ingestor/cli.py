@@ -33,7 +33,7 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "all"],
+        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "seeweb", "aruba", "all"],
         required=True,
         help="Provider to ingest",
     )
@@ -99,7 +99,7 @@ def _parse() -> argparse.ArgumentParser:
     return p
 
 
-PROVIDERS_ALL = ["azure", "aws", "gcp", "hetzner", "digitalocean", "scaleway", "ovh"]
+PROVIDERS_ALL = ["azure", "aws", "gcp", "hetzner", "digitalocean", "scaleway", "ovh", "seeweb", "aruba"]
 
 
 async def _run_egress_ingestion(db, provider: str) -> None:
@@ -221,6 +221,7 @@ async def run_ingest(
     all_costs: bool = False,
     costs_only: bool = False,
 ) -> None:
+    from connectors import aruba as aruba_conn
     from connectors import aws as aws_conn
     from connectors import azure as azure_conn
     from connectors import digitalocean as digitalocean_conn
@@ -228,6 +229,7 @@ async def run_ingest(
     from connectors import hetzner as hetzner_conn
     from connectors import ovh as ovh_conn
     from connectors import scaleway as scaleway_conn
+    from connectors import seeweb as seeweb_conn
 
     if quick and region is None:
         region = "eu-west-1" if provider == "aws" else ("westeurope" if provider == "azure" else None)
@@ -304,6 +306,26 @@ async def run_ingest(
                 logger.info("OVH ingestion completed successfully")
             except Exception as e:
                 logger.error(f"OVH ingestion failed: {e}", exc_info=True)
+        if not skip_instances and provider in ("seeweb", "all"):
+            try:
+                await seeweb_conn.ingest(
+                    db,
+                    only_eu=only_eu,
+                    purchase_model=purchase_model,
+                )
+                logger.info("Seeweb ingestion completed successfully")
+            except Exception as e:
+                logger.error(f"Seeweb ingestion failed: {e}", exc_info=True)
+        if not skip_instances and provider in ("aruba", "all"):
+            try:
+                await aruba_conn.ingest(
+                    db,
+                    only_eu=only_eu,
+                    purchase_model=purchase_model,
+                )
+                logger.info("Aruba ingestion completed successfully")
+            except Exception as e:
+                logger.error(f"Aruba ingestion failed: {e}", exc_info=True)
         # Cost rate ingestion: egress, storage, public IP, OS license
         # When egress_only or costs_only, skip instance ingestion; cost provider = all
         cost_provider = "all" if (egress_only or costs_only) else provider

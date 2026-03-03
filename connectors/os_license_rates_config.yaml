@@ -35,3 +35,8 @@ ovh:
   linux: 0.0
   windows: 0.018
   rhel: 0.01
+
+aruba:
+  linux: 0.0
+  windows: 0.0
+  rhel: 0.0

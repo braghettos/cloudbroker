@@ -21,3 +21,6 @@ scaleway:
 
 ovh:
   eur_per_hour: 0.0
+
+aruba:
+  eur_per_hour: 0.0  # included with Cloud Server

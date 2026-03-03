@@ -107,6 +107,12 @@ ingest-scaleway: ## Ingest Scaleway (requires SCW_ACCESS_KEY + SCW_SECRET_KEY)
 ingest-ovh: ## Ingest OVH (requires OVH keys)
 	$(PYTHON) -m apps.ingestor ingest --provider ovh
 
+ingest-seeweb: ## Ingest Seeweb (requires SEEWEB_USERNAME + SEEWEB_PASSWORD)
+	$(PYTHON) -m apps.ingestor ingest --provider seeweb
+
+ingest-aruba: ## Ingest Aruba Cloud (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider aruba
+
 ingest-all: ## Ingest all providers
 	$(PYTHON) -m apps.ingestor ingest --provider all
 

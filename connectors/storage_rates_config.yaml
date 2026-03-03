@@ -50,3 +50,12 @@ ovh:
   balanced:
     region_slug: null
     eur_per_gb_month: 0.05
+
+# aruba: https://www.arubacloud.com/pricing/
+aruba:
+  ssd:
+    region_slug: null
+    eur_per_gb_month: 0.06
+  hdd:
+    region_slug: null
+    eur_per_gb_month: 0.03

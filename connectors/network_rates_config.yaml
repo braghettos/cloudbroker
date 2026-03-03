@@ -31,3 +31,10 @@ ovh:
   free_tier_gb_per_month: 20480
   cross_region_eur_per_gb: 0.002
   cross_az_eur_per_gb: 0.002
+
+# aruba: https://www.arubacloud.com/pricing/ - Cloud Server includes unlimited traffic
+aruba:
+  egress_eur_per_gb: 0.0
+  free_tier_gb_per_month: 0  # unlimited
+  cross_region_eur_per_gb: 0.0
+  cross_az_eur_per_gb: 0.0

@@ -14,7 +14,7 @@ CloudBroker is deployed as a **shared service** on the host Kubernetes cluster. 
 
 **Option A: Interactive script**
 ```bash
-./scripts/create-secrets.sh
+./deploy/scripts/create-secrets.sh
 ```
 
 **Option B: Manual**
@@ -43,7 +43,7 @@ kubectl apply -k deploy/
 
 ### 3. Run migrations and ingest data
 
-Migrations run automatically via an init container when the API pod starts. In cloudbroker, `make deploy` deploys CloudBroker only. For ingestion, run `make deploy-ingest` (creates secret from `.env` and runs the ingest Job). For the full stack (Kind, CloudBroker, Coder, template), use `make deploy` from [cloudburst-coder-template](../cloudburst-coder-template).
+Migrations run automatically via an init container when the API pod starts. In cloudbroker, `make deploy` deploys CloudBroker only. For ingestion, run `make deploy-ingest` (creates secret from `.env` and runs the ingest Job).
 
 For providers that need credentials (Hetzner, AWS, GCP, etc.), create a secret before deploy:
 

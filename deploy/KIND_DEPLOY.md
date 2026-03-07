@@ -3,13 +3,10 @@
 ## Deployed (Kind cluster: cloudburst)
 
 - **CloudBroker**: PostgreSQL + API running in `cloudbroker` namespace
-- **Coder**: PostgreSQL + Coder running in `coder` namespace
-- **Tailscale operator**: Not installed (requires OAuth credentials - configure separately)
 
 ## Access (NodePort)
 
 - **CloudBroker**: http://localhost:30080 (NodePort 30080)
-- **Coder**: http://localhost:30180 (NodePort 30180)
 
 For Kind, create the cluster with `extraPortMappings` so NodePorts are reachable on localhost:
 
@@ -22,8 +19,6 @@ nodes:
   extraPortMappings:
   - containerPort: 30080
     hostPort: 30080
-  - containerPort: 30180
-    hostPort: 30180
 
 # kind create cluster --name cloudburst --config kind-config.yaml
 ```
@@ -40,10 +35,6 @@ docker system prune -af
 docker builder prune -af
 docker system prune -af --volumes
 ```
-
-## Deploy Coder (CloudNative-PG)
-
-Coder uses CloudNative-PG for PostgreSQL. See [CODER_CNPG_DEPLOY.md](CODER_CNPG_DEPLOY.md).
 
 ## Deploy CloudBroker (after freeing space if needed)
 
@@ -69,6 +60,14 @@ kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=cloudbroker -n 
 
 # 5. Verify (NodePort 30080)
 curl http://localhost:30080/health
+```
+
+## Optional: Bitnami PostgreSQL (alternative to CNPG)
+
+If CloudNative-PG operator has issues, use Bitnami PostgreSQL instead:
+```bash
+helm install cloudbroker-db bitnami/postgresql -n cloudbroker --create-namespace -f deploy/bitnami-postgres-values.yaml
+kubectl apply -f deploy/api-deployment-bitnami.yaml -f deploy/api-service.yaml
 ```
 
 ## Optional: Use PVC for Persistent Data

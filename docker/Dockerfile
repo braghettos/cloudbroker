@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python deps
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir -e ".[ingest]"
 
 COPY app/ ./app/
 COPY apps/ ./apps/

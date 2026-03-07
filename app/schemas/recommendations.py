@@ -88,6 +88,10 @@ class RecommendationRequest(BaseModel):
         default=None,
         description="Optional list of provider slugs to exclude from recommendations.",
     )
+    excluded_instance_types: list[str] | None = Field(
+        default=None,
+        description="Optional list of instance type names to exclude (e.g. after provisioning failure).",
+    )
     cost_weight: float | None = Field(
         default=None,
         ge=0.0,

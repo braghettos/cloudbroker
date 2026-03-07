@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -675,6 +675,24 @@ class RecommendationService:
         # Filter excluded providers
         if req.excluded_providers:
             stmt = stmt.where(~Provider.slug.in_(req.excluded_providers))
+
+        # Filter excluded instance types (e.g. after provisioning failure)
+        if req.excluded_instance_types:
+            stmt = stmt.where(~InstanceType.name.in_(req.excluded_instance_types))
+
+        # Azure ARM-only sizes (pls, ps_v5, plds) may be mislabeled as x86_64 in the DB.
+        # Exclude them when requesting x86_64 to avoid "Arm64 VM size with x64 image" failures.
+        if arch_val == "x86_64":
+            stmt = stmt.where(
+                or_(
+                    Provider.slug != "azure",
+                    and_(
+                        ~InstanceType.name.ilike("%pls%"),
+                        ~InstanceType.name.ilike("%ps_v5%"),
+                        ~InstanceType.name.ilike("%plds%"),
+                    ),
+                )
+            )
 
         # Filter by min_gpu_count when requested
         if req.min_gpu_count is not None and req.min_gpu_count > 0:

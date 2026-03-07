@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 from decimal import Decimal
 
@@ -25,28 +26,51 @@ EU_COUNTRY_CODES = {"DE", "FI", "US"}  # fsn1,nbg1=DE, hel1=FI; ash,hil=US - onl
 EU_LOCATION_NAMES = {"fsn1", "nbg1", "hel1"}  # Falkenstein, Nuremberg, Helsinki
 
 
+# Timeout and retries for transient network issues (e.g. ConnectTimeout during TLS)
+HETZNER_TIMEOUT = 60.0
+HETZNER_FETCH_RETRIES = 3
+
+
 async def _fetch_locations(token: str) -> list[dict]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{HETZNER_BASE}/locations",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"per_page": 50},
-        )
-        r.raise_for_status()
-        data = r.json()
-    return data.get("locations") or []
+    last_err = None
+    for attempt in range(1, HETZNER_FETCH_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=HETZNER_TIMEOUT) as client:
+                r = await client.get(
+                    f"{HETZNER_BASE}/locations",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"per_page": 50},
+                )
+                r.raise_for_status()
+                data = r.json()
+            return data.get("locations") or []
+        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as e:
+            last_err = e
+            if attempt < HETZNER_FETCH_RETRIES:
+                logger.warning("Hetzner locations fetch attempt %s/%s failed: %s, retrying in 5s...", attempt, HETZNER_FETCH_RETRIES, e)
+                await asyncio.sleep(5)
+    raise last_err
 
 
 async def _fetch_server_types(token: str) -> list[dict]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(
-            f"{HETZNER_BASE}/server_types",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"per_page": 50},
-        )
-        r.raise_for_status()
-        data = r.json()
-    return data.get("server_types") or []
+    last_err = None
+    for attempt in range(1, HETZNER_FETCH_RETRIES + 1):
+        try:
+            async with httpx.AsyncClient(timeout=HETZNER_TIMEOUT) as client:
+                r = await client.get(
+                    f"{HETZNER_BASE}/server_types",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params={"per_page": 50},
+                )
+                r.raise_for_status()
+                data = r.json()
+            return data.get("server_types") or []
+        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as e:
+            last_err = e
+            if attempt < HETZNER_FETCH_RETRIES:
+                logger.warning("Hetzner server_types fetch attempt %s/%s failed: %s, retrying in 5s...", attempt, HETZNER_FETCH_RETRIES, e)
+                await asyncio.sleep(5)
+    raise last_err
 
 
 def _price_per_hour_eur(price_entry: dict) -> float | None:

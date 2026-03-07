@@ -1,0 +1,15 @@
+# Kind cluster config with NodePort mappings for Coder and CloudBroker
+# extraPortMappings exposes node ports to the host; containerPort must match the
+# NodePort used by the K8s Service (CloudBroker: 30080, Coder: 30180).
+# Usage: kind create cluster --name cloudburst --config deploy/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+- role: control-plane
+  extraPortMappings:
+  - containerPort: 30080
+    hostPort: 30080
+    # CloudBroker API (api-service.yaml nodePort: 30080)
+  - containerPort: 30180
+    hostPort: 30180
+    # Coder UI (coder-values.yaml httpNodePort: 30180)

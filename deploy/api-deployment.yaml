@@ -1,0 +1,80 @@
+# CloudBroker API Deployment
+# Admin must create the secrets before deploying:
+#   kubectl create secret generic cloudbroker-db-app -n cloudbroker --from-literal=password=YOUR_SECURE_PASSWORD
+#   kubectl create secret generic cloudbroker-api-secrets -n cloudbroker \
+#     --from-literal=database_url='postgresql+asyncpg://cloudbroker:YOUR_PASSWORD@cloudbroker-db-rw:5432/cloudbroker' \
+#     --from-literal=database_url_sync='postgresql://cloudbroker:YOUR_PASSWORD@cloudbroker-db-rw:5432/cloudbroker'
+# Optional: add --from-literal=api_key='your-api-key' for production auth
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudbroker-api
+  namespace: cloudbroker
+  labels:
+    app.kubernetes.io/name: cloudbroker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudbroker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudbroker
+    spec:
+      initContainers:
+        - name: migrate
+          image: ghcr.io/braghettos/cloudbroker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL_SYNC
+              valueFrom:
+                secretKeyRef:
+                  name: cloudbroker-api-secrets
+                  key: database_url_sync
+      containers:
+        - name: api
+          image: ghcr.io/braghettos/cloudbroker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cloudbroker-api-secrets
+                  key: database_url
+            - name: DATABASE_URL_SYNC
+              valueFrom:
+                secretKeyRef:
+                  name: cloudbroker-api-secrets
+                  key: database_url_sync
+            - name: API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: cloudbroker-api-secrets
+                  key: api_key
+                  optional: true
+          ports:
+            - containerPort: 8000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

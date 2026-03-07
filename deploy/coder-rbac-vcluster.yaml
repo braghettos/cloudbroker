@@ -1,0 +1,17 @@
+# RBAC for Coder provisioner to deploy vcluster/Helm.
+# The vcluster chart creates ClusterRoles/Roles that grant broad permissions;
+# Kubernetes requires the creator to hold those permissions. For Kind/dev, we
+# grant cluster-admin so the provisioner can create any resources the chart needs.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: coder-vcluster-provisioner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: coder
+    namespace: coder

@@ -1,0 +1,60 @@
+# CloudBroker API with Bitnami PostgreSQL
+# Service name: cloudbroker-db-postgresql (from Bitnami chart)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudbroker-api
+  namespace: cloudbroker
+  labels:
+    app.kubernetes.io/name: cloudbroker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudbroker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudbroker
+    spec:
+      initContainers:
+        - name: migrate
+          image: ghcr.io/braghettos/cloudbroker:latest
+          imagePullPolicy: Never
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL_SYNC
+              value: "postgresql://cloudbroker:cloudbroker@cloudbroker-db-postgresql:5432/cloudbroker"
+      containers:
+        - name: api
+          image: ghcr.io/braghettos/cloudbroker:latest
+          imagePullPolicy: Never
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://cloudbroker:cloudbroker@cloudbroker-db-postgresql:5432/cloudbroker"
+            - name: DATABASE_URL_SYNC
+              value: "postgresql://cloudbroker:cloudbroker@cloudbroker-db-postgresql:5432/cloudbroker"
+          ports:
+            - containerPort: 8000
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

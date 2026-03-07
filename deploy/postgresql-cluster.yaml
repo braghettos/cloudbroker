@@ -1,0 +1,20 @@
+# CloudNative-PG Cluster for CloudBroker
+# Prerequisite: CloudNative-PG operator must be installed on the cluster
+# Admin must create the app password secret before deploying:
+#   kubectl create secret generic cloudbroker-db-app -n cloudbroker --from-literal=password=YOUR_SECURE_PASSWORD
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cloudbroker-db
+  namespace: cloudbroker
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: cloudbroker
+      owner: cloudbroker
+      secret:
+        name: cloudbroker-db-app
+  storage:
+    size: 10Gi

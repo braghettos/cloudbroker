@@ -1,0 +1,19 @@
+# CloudNative-PG Cluster for Coder
+# Prerequisite: CloudNative-PG operator must be installed
+# Create password secret: kubectl create secret generic coder-db-app -n coder --from-literal=password=YOUR_PASSWORD
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: coder-db
+  namespace: coder
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:16
+  bootstrap:
+    initdb:
+      database: coder
+      owner: coder
+      secret:
+        name: coder-db-app
+  storage:
+    size: 5Gi

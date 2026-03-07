@@ -1,0 +1,3 @@
+# Bitnami PostgreSQL - alternative when CloudNative-PG operator has issues
+# Use: helm install cloudbroker-db bitnami/postgresql -n cloudbroker --create-namespace -f deploy/bitnami-postgres-values.yaml
+# Then deploy API with: kubectl apply -f deploy/api-deployment-bitnami.yaml api-service.yaml

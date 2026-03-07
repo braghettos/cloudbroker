@@ -1,0 +1,41 @@
+# One-off Job to ingest all provider data into CloudBroker
+# Runs after CloudBroker API is ready. Provider credentials from env or cloudbroker-ingest-credentials secret.
+# GCP: when GOOGLE_APPLICATION_CREDENTIALS points to a file in .env, create-ingest-secrets.sh adds
+# credentials.json to the secret; it is mounted here for the GCP client.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cloudbroker-ingest-all
+  namespace: cloudbroker
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: ingest
+          image: ghcr.io/braghettos/cloudbroker:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "apps.ingestor", "ingest", "--provider", "all"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cloudbroker-api-secrets
+                  key: database_url
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/ingest/credentials.json
+          envFrom:
+            - secretRef:
+                name: cloudbroker-ingest-credentials
+                optional: true
+          volumeMounts:
+            - name: ingest-creds
+              mountPath: /var/run/secrets/ingest
+              readOnly: true
+      volumes:
+        - name: ingest-creds
+          secret:
+            secretName: cloudbroker-ingest-credentials
+            optional: true

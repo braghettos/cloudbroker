@@ -1,6 +1,6 @@
 # CloudBroker Kubernetes Deployment (Host Cluster)
 
-CloudBroker is deployed as a **shared service** on the host Kubernetes cluster. It is not part of the Coder workspace template—admins deploy it once.
+CloudBroker is deployed as a **shared service** on the host Kubernetes cluster. Admins deploy it once.
 
 ## Prerequisites
 

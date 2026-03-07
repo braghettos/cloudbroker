@@ -1,8 +1,0 @@
-auth:
-  username: cloudbroker
-  password: cloudbroker
-  database: cloudbroker
-
-primary:
-  persistence:
-    size: 5Gi

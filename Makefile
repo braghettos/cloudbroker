@@ -190,7 +190,7 @@ deploy-cloudbroker: ## Deploy CloudBroker (CloudNative-PG + API)
 		--from-literal=database_url_sync="postgresql://cloudbroker:$(DB_PASSWORD)@cloudbroker-db-rw:5432/cloudbroker" \
 		--dry-run=client -o yaml | kubectl apply -f -
 	@for i in 1 2 3 4 5 6; do kubectl apply -k deploy/ && break; echo "Webhook may be starting, retry in 15s..."; sleep 15; done
-	@kubectl wait --for=condition=Ready cluster/cloudbroker-db -n cloudbroker --timeout=300s
+	@kubectl wait --for=condition=Ready cluster/cloudbroker-db -n cloudbroker --timeout=600s
 	@kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=cloudbroker -n cloudbroker --timeout=120s
 	@echo "CloudBroker deployed. NodePort 30080: http://localhost:30080 (or http://<node-ip>:30080)"
 

@@ -53,6 +53,3 @@ Thumbs.db
 
 # Secrets
 secrets/
-
-# Generated Coder OIDC values (from envsubst)
-deploy/coder-values-oidc-rendered.yaml

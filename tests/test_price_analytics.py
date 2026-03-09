@@ -19,7 +19,6 @@ from app.models.price import PurchaseModel
 from app.models.provider import ProviderType
 from app.services.price_analytics import (
     SUSPICIOUS_CHANGE_PERCENT,
-    analyze_price_trends,
     detect_price_changes,
     validate_price_changes_data_quality,
 )

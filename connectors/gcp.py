@@ -10,9 +10,10 @@ from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
 from app.models.price import PurchaseModel
 from app.services.ingestion import (
+    append_price,
     ensure_instance_type,
     ensure_region,
-    append_price,
+    pick_one_per_logical_product,
 )
 
 logger = get_logger(__name__)
@@ -198,20 +199,16 @@ async def ingest(
     )
     await db.flush()
 
-    # Map SKU to pseudo type: CPU vs RAM
-    # Filter SKUs based on purchase_model (on_demand vs spot/preemptible)
-    inserted = 0
+    # Map SKU to pseudo type: CPU vs RAM; collect candidates then deduplicate
+    candidates: list[dict] = []
     for sku in skus:
         if not _is_compute_linux_vm_sku(sku):
             continue
-
-        # Filter by purchase model
         is_preemptible = _is_preemptible_sku(sku)
         if purchase == PurchaseModel.ON_DEMAND and is_preemptible:
-            continue  # Skip preemptible SKUs when ingesting on_demand
+            continue
         if purchase == PurchaseModel.SPOT and not is_preemptible:
-            continue  # Skip on_demand SKUs when ingesting spot
-
+            continue
         price_info = _extract_unit_price_nanos(sku)
         if not price_info:
             continue
@@ -226,27 +223,43 @@ async def ingest(
             it = ram_it
         else:
             continue
-        # Price is per unit (per hour for VM usage)
-        price_eur = to_eur(price_per_unit, rate_usd_eur) if currency != "EUR" else price_per_unit
-
+        sku_name = getattr(sku, "name", "") or ""
         for reg in _service_regions(sku):
             if only_eu and not is_eu_region(reg):
                 continue
             slug = reg.lower().replace("_", "-")
             if slug not in region_by_slug:
                 continue
-            region = region_by_slug[slug]
-            p = await append_price(
-                db,
-                instance_type_id=it.id,
-                region_id=region.id,
-                purchase_model=purchase,
-                currency=currency,
-                price_per_hour=price_per_unit,
-                price_eur_per_hour=price_eur,
+            candidates.append(
+                {
+                    "it": it,
+                    "region_slug": slug,
+                    "price_per_unit": price_per_unit,
+                    "currency": currency,
+                    "sku_name": sku_name,
+                }
             )
-            if p:
-                inserted += 1
+    # One price per (pseudo_type, region): prefer by SKU name for consistency
+    canonical = pick_one_per_logical_product(
+        candidates,
+        group_key=lambda c: (c["it"].name, c["region_slug"]),
+        sort_key=lambda c: (c["sku_name"], c["price_per_unit"]),
+    )
+    inserted = 0
+    for c in canonical:
+        region = region_by_slug[c["region_slug"]]
+        price_eur = to_eur(c["price_per_unit"], rate_usd_eur) if c["currency"] != "EUR" else c["price_per_unit"]
+        p = await append_price(
+            db,
+            instance_type_id=c["it"].id,
+            region_id=region.id,
+            purchase_model=purchase,
+            currency=c["currency"],
+            price_per_hour=c["price_per_unit"],
+            price_eur_per_hour=price_eur,
+        )
+        if p:
+            inserted += 1
 
     logger.info(
         "GCP ingestion completed",

@@ -62,4 +62,5 @@ testpaths = ["tests"]
 markers = [
     "e2e: end-to-end tests (require running API: make up, migrate, ingest, ingest --egress)",
     "exhaustive: full recommendation param matrix (~430 tests, run with pytest -m exhaustive)",
+    "live_data: validates live DB data quality (may fail if pre-deduplication data exists)",
 ]

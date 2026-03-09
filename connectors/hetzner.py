@@ -12,10 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models.price import PurchaseModel
 from app.services.ingestion import (
+    append_price,
     ensure_instance_type,
     ensure_provider,
     ensure_region,
-    append_price,
+    pick_one_per_logical_product,
 )
 
 logger = get_logger(__name__)
@@ -182,12 +183,23 @@ async def ingest(
         await db.flush()
 
         prices = st.get("prices") or []
-        for price_entry in prices:
-            location_name = (price_entry.get("location") or "").strip().lower()
-            if location_name not in region_by_slug:
+        candidates = []
+        for pe in prices:
+            loc = (pe.get("location") or "").strip().lower()
+            if loc not in region_by_slug:
                 continue
-            region = region_by_slug[location_name]
-            eur_per_hour = _price_per_hour_eur(price_entry)
+            price = _price_per_hour_eur(pe)
+            if price is None or price < 0:
+                continue
+            candidates.append({"location": loc, "price": price})
+        canonical = pick_one_per_logical_product(
+            candidates,
+            group_key=lambda c: (name, c["location"]),
+            sort_key=lambda c: (c["price"] or 0),
+        )
+        for c in canonical:
+            region = region_by_slug[c["location"]]
+            eur_per_hour = c["price"]
             if eur_per_hour is None or eur_per_hour < 0:
                 continue
             p = await append_price(

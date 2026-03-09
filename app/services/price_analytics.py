@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.logging import get_logger
-from app.models import InstanceType, Price, Region
+from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
 
 logger = get_logger(__name__)
@@ -52,6 +53,7 @@ async def detect_price_changes(
     db: AsyncSession,
     purchase_model: PurchaseModel | None = None,
     since: datetime.datetime | None = None,
+    exclude_test_providers: bool = True,
 ) -> list[PriceChange]:
     """Detect price changes by comparing current prices with previous prices.
 
@@ -59,6 +61,7 @@ async def detect_price_changes(
         db: Database session
         purchase_model: Filter by purchase model (None = all)
         since: Only check prices updated since this timestamp (None = check all)
+        exclude_test_providers: If True, exclude providers with slug starting with test prefix (default: True)
 
     Returns:
         List of price change events
@@ -71,6 +74,14 @@ async def detect_price_changes(
         Price.region_id,
         Price.purchase_model,
     ).distinct()
+
+    if exclude_test_providers:
+        stmt = (
+            stmt.select_from(Price)
+            .join(InstanceType, Price.instance_type_id == InstanceType.id)
+            .join(Provider, InstanceType.provider_id == Provider.id)
+            .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
+        )
 
     if purchase_model:
         stmt = stmt.where(Price.purchase_model == purchase_model)
@@ -149,6 +160,7 @@ async def analyze_price_trends(
     db: AsyncSession,
     purchase_model: PurchaseModel | None = None,
     days: int = 30,
+    exclude_test_providers: bool = True,
 ) -> list[PriceTrend]:
     """Analyze price trends over a time period.
 
@@ -156,6 +168,7 @@ async def analyze_price_trends(
         db: Database session
         purchase_model: Filter by purchase model (None = all)
         days: Number of days to analyze
+        exclude_test_providers: If True, exclude providers with slug starting with test prefix (default: True)
 
     Returns:
         List of price trend analyses
@@ -170,6 +183,14 @@ async def analyze_price_trends(
         Price.region_id,
         Price.purchase_model,
     ).distinct()
+
+    if exclude_test_providers:
+        stmt = (
+            stmt.select_from(Price)
+            .join(InstanceType, Price.instance_type_id == InstanceType.id)
+            .join(Provider, InstanceType.provider_id == Provider.id)
+            .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
+        )
 
     if purchase_model:
         stmt = stmt.where(Price.purchase_model == purchase_model)
@@ -236,3 +257,32 @@ async def analyze_price_trends(
     )
 
     return trends
+
+
+# Threshold above which a percent change is suspicious (likely product mix, e.g. spot vs on-demand)
+SUSPICIOUS_CHANGE_PERCENT = 500.0
+
+
+def validate_price_changes_data_quality(
+    changes: list[PriceChange],
+    max_plausible_percent: float = SUSPICIOUS_CHANGE_PERCENT,
+) -> tuple[list[PriceChange], list[PriceChange]]:
+    """Split changes into plausible (real) vs suspicious (possible product mix).
+
+    Large percent changes (e.g. >500%) often indicate comparing different products
+    (Linux vs Windows, spot vs on-demand) rather than real price changes.
+
+    Returns:
+        (plausible_changes, suspicious_changes)
+    """
+    plausible: list[PriceChange] = []
+    suspicious: list[PriceChange] = []
+    for c in changes:
+        if c.old_price_eur_per_hour is None or c.old_price_eur_per_hour <= 0:
+            suspicious.append(c)
+            continue
+        if abs(c.price_change_percent) > max_plausible_percent:
+            suspicious.append(c)
+        else:
+            plausible.append(c)
+    return (plausible, suspicious)

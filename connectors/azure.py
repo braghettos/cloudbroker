@@ -17,10 +17,11 @@ from app.core.logging import get_logger
 from app.models import Region
 from app.models.price import PurchaseModel
 from app.services.ingestion import (
+    append_price,
     ensure_instance_type,
     ensure_provider,
     ensure_region,
-    append_price,
+    pick_one_per_logical_product,
 )
 
 logger = get_logger(__name__)
@@ -126,6 +127,12 @@ def _extract_hourly_price_usd(item: dict) -> float | None:
         return None
 
 
+def _is_linux_product(item: dict) -> bool:
+    """Prefer Linux over Windows for consistent single price per logical product."""
+    name = (item.get("productName") or "").lower()
+    return "linux" in name or "linux" in (item.get("meterName") or "").lower()
+
+
 def _is_spot_vm_item(item: dict) -> bool:
     """Heuristically determine whether a Retail Prices item is for a Spot VM.
 
@@ -207,54 +214,65 @@ async def ingest(
             if not reg:
                 continue
             next_link: str | None = None
+            all_candidates: list[dict] = []
             while True:
                 items, next_link = await _fetch_retail_prices_page(client, spec.slug, next_page_link=next_link)
                 for item in items:
-                    # API uses productName for category; VM size is in armSkuName or skuName.
                     sku = (item.get("armSkuName") or item.get("skuName") or "").strip()
                     if not sku or not sku.startswith("Standard_"):
                         continue
-
-                    # Filter by purchase model: exclude Spot meters from on_demand,
-                    # and include only Spot meters when purchase_model=spot.
                     is_spot = _is_spot_vm_item(item)
                     if purchase == PurchaseModel.ON_DEMAND and is_spot:
                         continue
                     if purchase == PurchaseModel.SPOT and not is_spot:
                         continue
-
                     price_usd = _extract_hourly_price_usd(item)
                     if price_usd is None or price_usd <= 0:
                         continue
-                    vcpu, ram_gb = parse_azure_vm_specs(sku)
-                    it = await ensure_instance_type(
-                        db,
-                        provider_id=provider.id,
-                        name=sku,
-                        vcpu=vcpu,
-                        ram_gb=ram_gb,
-                        family=_azure_family_from_product(sku),
-                        generation=None,
-                        arch="x86_64",
-                        metadata_json=None,
-                    )
-                    await db.flush()
-                    instance_types_seen.add(sku)
-                    price_eur = to_eur(price_usd, rate_usd_eur)
-                    p = await append_price(
-                        db,
-                        instance_type_id=it.id,
-                        region_id=reg.id,
-                        purchase_model=purchase,
-                        currency="USD",
-                        price_per_hour=price_usd,
-                        price_eur_per_hour=price_eur,
-                    )
-                    if p:
-                        inserted += 1
+                    all_candidates.append(item)
                 if not next_link:
                     break
                 await asyncio.sleep(0.3)
+            # One price per (sku, region): prefer Linux over Windows
+            canonical = pick_one_per_logical_product(
+                all_candidates,
+                group_key=lambda i: (
+                    (i.get("armSkuName") or i.get("skuName") or "").strip(),
+                    i.get("armRegionName", ""),
+                ),
+                sort_key=lambda i: (0 if _is_linux_product(i) else 1, i.get("skuId", ""), i.get("meterId", "")),
+            )
+            for item in canonical:
+                sku = (item.get("armSkuName") or item.get("skuName") or "").strip()
+                price_usd = _extract_hourly_price_usd(item)
+                if price_usd is None or price_usd <= 0:
+                    continue
+                vcpu, ram_gb = parse_azure_vm_specs(sku)
+                it = await ensure_instance_type(
+                    db,
+                    provider_id=provider.id,
+                    name=sku,
+                    vcpu=vcpu,
+                    ram_gb=ram_gb,
+                    family=_azure_family_from_product(sku),
+                    generation=None,
+                    arch="x86_64",
+                    metadata_json=None,
+                )
+                await db.flush()
+                instance_types_seen.add(sku)
+                price_eur = to_eur(price_usd, rate_usd_eur)
+                p = await append_price(
+                    db,
+                    instance_type_id=it.id,
+                    region_id=reg.id,
+                    purchase_model=purchase,
+                    currency="USD",
+                    price_per_hour=price_usd,
+                    price_eur_per_hour=price_eur,
+                )
+                if p:
+                    inserted += 1
             await asyncio.sleep(0.2)
 
     logger.info(

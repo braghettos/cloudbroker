@@ -112,11 +112,32 @@ ingest-scaleway: ## Ingest Scaleway (requires SCW_ACCESS_KEY + SCW_SECRET_KEY)
 ingest-ovh: ## Ingest OVH (requires OVH keys)
 	$(PYTHON) -m apps.ingestor ingest --provider ovh
 
-ingest-seeweb: ## Ingest Seeweb (requires SEEWEB_USERNAME + SEEWEB_PASSWORD)
-	$(PYTHON) -m apps.ingestor ingest --provider seeweb
-
 ingest-aruba: ## Ingest Aruba Cloud (config-based, no API keys)
 	$(PYTHON) -m apps.ingestor ingest --provider aruba
+
+ingest-upcloud: ## Ingest UpCloud (requires UPCLOUD_USERNAME + UPCLOUD_PASSWORD)
+	$(PYTHON) -m apps.ingestor ingest --provider upcloud
+
+ingest-open-telekom-cloud: ## Ingest Open Telekom Cloud (public pricing API, no auth)
+	$(PYTHON) -m apps.ingestor ingest --provider open_telekom_cloud
+
+ingest-exoscale: ## Ingest Exoscale (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider exoscale
+
+ingest-ionos: ## Ingest IONOS Cloud (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider ionos
+
+ingest-gridscale: ## Ingest gridscale (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider gridscale
+
+ingest-stackit: ## Ingest STACKIT (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider stackit
+
+ingest-elastx: ## Ingest Elastx (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider elastx
+
+ingest-cyso-cloud: ## Ingest Cyso Cloud (config-based, no API keys)
+	$(PYTHON) -m apps.ingestor ingest --provider cyso_cloud
 
 ingest-all: ## Ingest all providers
 	$(PYTHON) -m apps.ingestor ingest --provider all

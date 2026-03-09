@@ -38,3 +38,52 @@ aruba:
   free_tier_gb_per_month: 0  # unlimited
   cross_region_eur_per_gb: 0.0
   cross_az_eur_per_gb: 0.0
+
+# EU providers (European Alternatives) - update from provider pricing pages
+upcloud:
+  egress_eur_per_gb: 0.005
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.005
+  cross_az_eur_per_gb: 0.005
+
+open_telekom_cloud:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+exoscale:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+ionos:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+gridscale:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+stackit:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+elastx:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+cyso_cloud:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01

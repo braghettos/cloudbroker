@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import datetime
+from typing import Callable, TypeVar
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -216,6 +218,40 @@ async def ensure_os_license_rate(
 
 def _truncate_to_hour(ts: datetime.datetime) -> datetime.datetime:
     return ts.replace(minute=0, second=0, microsecond=0)
+
+
+T = TypeVar("T")
+
+
+def pick_one_per_logical_product(
+    items: list[T],
+    group_key: Callable[[T], tuple],
+    sort_key: Callable[[T], tuple] | None = None,
+) -> list[T]:
+    """Deduplicate items so each logical product (group_key) has exactly one item.
+
+    Avoids multiple meters for the same logical product (e.g. Linux vs Windows,
+    different SKUs). For each group, keeps the item with the lowest sort_key.
+    If sort_key is None, keeps the first item seen.
+
+    Args:
+        items: List of items (e.g. API response items, price records).
+        group_key: Function returning (instance_type, region, ...) tuple to group by.
+        sort_key: Optional function returning tuple for stable sort (lower = preferred).
+
+    Returns:
+        One item per unique group_key.
+    """
+    groups: dict[tuple, T] = {}
+    for item in items:
+        key = group_key(item)
+        if key not in groups:
+            groups[key] = item
+        elif sort_key is not None:
+            # Keep the one with lower sort_key (e.g. Linux before Windows)
+            if sort_key(item) < sort_key(groups[key]):
+                groups[key] = item
+    return list(groups.values())
 
 
 async def append_price(

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import Provider, Region
@@ -30,9 +31,16 @@ async def list_regions(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[RegionResponse]:
-    """List regions with optional provider filter and pagination."""
-    base = select(Region)
-    count_base = select(func.count()).select_from(Region)
+    """List regions with optional provider filter and pagination (excludes test providers)."""
+    base = select(Region).join(Provider, Region.provider_id == Provider.id).where(
+        ~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%")
+    )
+    count_base = (
+        select(func.count())
+        .select_from(Region)
+        .join(Provider, Region.provider_id == Provider.id)
+        .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
+    )
 
     ref = _parse_provider_ref(provider)
     if ref is not None:

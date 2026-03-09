@@ -17,7 +17,6 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 | **Exoscale** | Switzerland | 🟢 High | 🟢 High | Low | APIv2, instance types documented |
 | **gridscale** | Germany | 🟢 High | 🟢 High | Low | REST API, cloud-init, Python client |
 | **IONOS** | Germany | 🟢 High | 🟢 High | Medium | Cloud API v6, pricing page |
-| **Seeweb** | Italy | 🟢 High | 🟢 High | Low | REST API, was previously in CloudBroker |
 | **Aruba Cloud** | Italy | 🟢 High | 🟢 High | Low | REST API, was previously in CloudBroker |
 | **Elastx** | Sweden | 🟡 Medium | 🟡 Medium | Medium | OpenStack Nova; pricing may need scraping |
 | **Cyso Cloud** | Netherlands | 🟡 Medium | 🟡 Medium | Medium | OpenStack-based; similar to OVH/Scaleway |
@@ -115,23 +114,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 7. Seeweb (Italy) — 🟢 High Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **API** | REST API at `https://api.seeweb.it/ecs/v2/`; JWT auth |
-| **Instance types** | eCS1 (1 CPU, 1GB), eCS2 (2 CPU, 2GB), etc.; Shared CPU, GPU, High Memory |
-| **Pricing** | SPU model; €0.019/hr (eCS1), €0.032/hr (eCS2); hourly rates documented |
-| **Regions** | Milan, Frosinone (IT), Lugano (CH), Sofia (BG) |
-
-**Note:** Seeweb connector was previously in CloudBroker (`connectors/seeweb.py` deleted in current branch). Re-adding would be straightforward.
-
-**CloudBroker:** Connector existed; restore or refactor. Effort: **Low**.  
-**Cloudburst:** REST API for server lifecycle. Effort: **Low**.
-
----
-
-### 8. Aruba Cloud (Italy) — 🟢 High Compatibility
+### 7. Aruba Cloud (Italy) — 🟢 High Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -147,7 +130,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 9. Elastx (Sweden) — 🟡 Medium Compatibility
+### 8. Elastx (Sweden) — 🟡 Medium Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -161,7 +144,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 10. Cyso Cloud (Netherlands) — 🟡 Medium Compatibility
+### 9. Cyso Cloud (Netherlands) — 🟡 Medium Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -175,7 +158,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 11. Open Telekom Cloud (Germany) — 🟡 Medium Compatibility
+### 10. Open Telekom Cloud (Germany) — 🟡 Medium Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -189,7 +172,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 12. STACKIT (Germany) — 🟡 Medium Compatibility
+### 11. STACKIT (Germany) — 🟡 Medium Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -206,18 +189,17 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 ## Recommended Integration Order
 
 ### Tier 1 — Quick wins (already removed or straightforward)
-1. **Seeweb** — Restore CloudBroker connector; add Cloudburst provisioner
-2. **Aruba Cloud** — Restore CloudBroker connector; add Cloudburst provisioner (more setup for VPC/volumes)
+1. **Aruba Cloud** — Restore CloudBroker connector; add Cloudburst provisioner (more setup for VPC/volumes)
 
 ### Tier 2 — Strong API support
-3. **UpCloud** — Plans + pricing API; clear data model
-4. **Exoscale** — APIv2; instance types documented
-5. **gridscale** — REST API, cloud-init, Python client
+2. **UpCloud** — Plans + pricing API; clear data model
+3. **Exoscale** — APIv2; instance types documented
+4. **gridscale** — REST API, cloud-init, Python client
 
 ### Tier 3 — More integration work
-6. **IONOS** — Mature API; pricing may need config
-7. **Open Telekom Cloud** — Pricing API + OpenStack
-8. **Elastx** — OpenStack; pricing config-based
+5. **IONOS** — Mature API; pricing may need config
+6. **Open Telekom Cloud** — Pricing API + OpenStack
+7. **Elastx** — OpenStack; pricing config-based
 9. **Cyso Cloud** — OpenStack
 10. **STACKIT** — IaaS API; verify pricing model
 
@@ -231,7 +213,6 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 - [Exoscale APIv2](https://openapi-v2.exoscale.com/)
 - [gridscale API](https://github.com/gridscale/gridscale_api_client_python)
 - [IONOS Cloud API v6](https://api.ionos.com/docs/cloud/v6/)
-- [Seeweb API](https://docs.seeweb.it/en/hosting/cloudserver/rest-api/API-Endpoints/)
 - [Aruba Cloud API](https://api.arubacloud.com/)
 - [Elastx OpenStack](https://docs.elastx.cloud/docs/openstack-iaas/guides/api_access/)
 - [Cyso Cloud API](https://cyso.cloud/docs/cloud/how-to-get-started-with-the-cyso-cloud-api/)

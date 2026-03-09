@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import InstanceType, Provider
@@ -32,9 +33,16 @@ async def list_instance_types(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[InstanceTypeResponse]:
-    """List instance types with filters and pagination."""
-    base = select(InstanceType)
-    count_base = select(func.count()).select_from(InstanceType)
+    """List instance types with filters and pagination (excludes test providers)."""
+    base = select(InstanceType).join(Provider, InstanceType.provider_id == Provider.id).where(
+        ~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%")
+    )
+    count_base = (
+        select(func.count())
+        .select_from(InstanceType)
+        .join(Provider, InstanceType.provider_id == Provider.id)
+        .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
+    )
 
     ref = _parse_provider_ref(provider)
     if ref is not None:
@@ -42,8 +50,8 @@ async def list_instance_types(
             base = base.where(InstanceType.provider_id == ref)
             count_base = count_base.where(InstanceType.provider_id == ref)
         else:
-            base = base.join(Provider).where(Provider.slug == ref)
-            count_base = count_base.join(Provider).where(Provider.slug == ref)
+            base = base.where(Provider.slug == ref)
+            count_base = count_base.where(Provider.slug == ref)
 
     if min_vcpu is not None:
         base = base.where(InstanceType.vcpu >= min_vcpu)

@@ -21,8 +21,6 @@ except ImportError:
 
 from app.core.database import AsyncSessionLocal
 from app.core.logging import get_logger
-from app.models.provider import ProviderType
-from app.services.ingestion import ensure_provider
 
 logger = get_logger(__name__)
 
@@ -33,7 +31,7 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "seeweb", "aruba", "all"],
+        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "open_telekom_cloud", "exoscale", "ionos", "gridscale", "stackit", "elastx", "cyso_cloud", "all"],
         required=True,
         help="Provider to ingest",
     )
@@ -99,20 +97,107 @@ def _parse() -> argparse.ArgumentParser:
     return p
 
 
-PROVIDERS_ALL = ["azure", "aws", "gcp", "hetzner", "digitalocean", "scaleway", "ovh", "seeweb", "aruba"]
+PROVIDERS_ALL = [
+    "azure",
+    "aws",
+    "gcp",
+    "hetzner",
+    "digitalocean",
+    "scaleway",
+    "ovh",
+    "aruba",
+    "upcloud",
+    "open_telekom_cloud",
+    "exoscale",
+    "ionos",
+    "gridscale",
+    "stackit",
+    "elastx",
+    "cyso_cloud",
+]
 
 
-async def _run_egress_ingestion(db, provider: str) -> None:
-    """Run egress rate ingestion for provider(s). API-based where possible, config otherwise."""
+def _get_providers_to_ingest(provider: str) -> list[str]:
+    """Return list of provider slugs to ingest."""
+    return [provider] if provider != "all" else list(PROVIDERS_ALL)
+
+
+async def _ingest_provider_instance(
+    slug: str,
+    only_eu: bool,
+    purchase_model: str,
+    region: str | None,
+) -> None:
+    """Run instance ingestion for a single provider with its own DB session."""
+    from connectors import aruba as aruba_conn
+    from connectors import aws as aws_conn
+    from connectors import azure as azure_conn
+    from connectors import digitalocean as digitalocean_conn
+    from connectors import gcp as gcp_conn
+    from connectors import gcp_machine_types as gcp_machines_conn
+    from connectors import hetzner as hetzner_conn
+    from connectors import ovh as ovh_conn
+    from connectors import scaleway as scaleway_conn
+    from connectors import upcloud as upcloud_conn
+    from connectors import open_telekom_cloud as otc_conn
+    from connectors import exoscale as exoscale_conn
+    from connectors import ionos as ionos_conn
+    from connectors import gridscale as gridscale_conn
+    from connectors import stackit as stackit_conn
+    from connectors import elastx as elastx_conn
+    from connectors import cyso_cloud as cyso_cloud_conn
+
+    conn_map = {
+        "aruba": aruba_conn,
+        "aws": aws_conn,
+        "azure": azure_conn,
+        "digitalocean": digitalocean_conn,
+        "gcp": gcp_conn,
+        "hetzner": hetzner_conn,
+        "ovh": ovh_conn,
+        "scaleway": scaleway_conn,
+        "upcloud": upcloud_conn,
+        "open_telekom_cloud": otc_conn,
+        "exoscale": exoscale_conn,
+        "ionos": ionos_conn,
+        "gridscale": gridscale_conn,
+        "stackit": stackit_conn,
+        "elastx": elastx_conn,
+        "cyso_cloud": cyso_cloud_conn,
+    }
+    conn = conn_map.get(slug)
+    if not conn:
+        return
+
+    async with AsyncSessionLocal() as db:
+        try:
+            if slug == "aws":
+                await aws_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model, region=region)
+            elif slug == "azure":
+                await azure_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model, region=region)
+            else:
+                await conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
+            if slug == "gcp":
+                await gcp_machines_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
+            await db.commit()
+            logger.info(f"{slug} ingestion completed successfully")
+        except Exception as e:
+            logger.error(f"{slug} ingestion failed: {e}", exc_info=True)
+            raise
+
+
+async def _ingest_egress_for_provider(slug: str) -> None:
+    """Run egress ingestion for a single provider with its own DB session."""
     from connectors import egress_azure as egress_azure_conn
     from connectors import egress_aws as egress_aws_conn
     from connectors import egress_config as egress_config_module
     from connectors import egress_gcp as egress_gcp_conn
 
-    providers = [provider] if provider != "all" else PROVIDERS_ALL
     config_providers = set(egress_config_module.get_config_providers())
+    if slug not in ("azure", "aws", "gcp") and slug not in config_providers:
+        return
 
-    for slug in providers:
+    async with AsyncSessionLocal() as db:
         try:
             if slug == "azure":
                 await egress_azure_conn.ingest_egress_azure(db)
@@ -122,24 +207,24 @@ async def _run_egress_ingestion(db, provider: str) -> None:
                 await egress_gcp_conn.ingest_egress_gcp(db)
             elif slug in config_providers:
                 await egress_config_module.ingest_egress_from_config(db, slug)
-            else:
-                continue
+            await db.commit()
             logger.info(f"{slug} egress rate ingestion completed successfully")
         except Exception as e:
             logger.error(f"{slug} egress ingestion failed: {e}", exc_info=True)
 
 
-async def _run_storage_ingestion(db, provider: str) -> None:
-    """Run storage rate ingestion. API for AWS/Azure/GCP, config otherwise."""
+async def _ingest_storage_for_provider(slug: str) -> None:
+    """Run storage ingestion for a single provider with its own DB session."""
     from connectors import storage_aws as storage_aws_conn
     from connectors import storage_azure as storage_azure_conn
     from connectors import storage_config as storage_config_module
     from connectors import storage_gcp as storage_gcp_conn
 
-    providers = [provider] if provider != "all" else PROVIDERS_ALL
     config_providers = set(storage_config_module.get_storage_config_providers())
+    if slug not in ("aws", "azure", "gcp") and slug not in config_providers:
+        return
 
-    for slug in providers:
+    async with AsyncSessionLocal() as db:
         try:
             if slug == "aws":
                 await storage_aws_conn.ingest_storage_aws(db)
@@ -149,62 +234,44 @@ async def _run_storage_ingestion(db, provider: str) -> None:
                 await storage_gcp_conn.ingest_storage_gcp(db)
             elif slug in config_providers:
                 await storage_config_module.ingest_storage_from_config(db, slug)
-            else:
-                continue
+            await db.commit()
             logger.info(f"{slug} storage rate ingestion completed successfully")
         except Exception as e:
             logger.error(f"{slug} storage ingestion failed: {e}", exc_info=True)
 
 
-async def _run_public_ip_ingestion(db, provider: str) -> None:
-    """Run public IP rate ingestion from config."""
+async def _ingest_public_ip_for_provider(slug: str) -> None:
+    """Run public IP ingestion for a single provider with its own DB session."""
     from connectors import public_ip_config as public_ip_config_module
 
-    providers = [provider] if provider != "all" else PROVIDERS_ALL
     config_providers = set(public_ip_config_module.get_public_ip_config_providers())
+    if slug not in config_providers:
+        return
 
-    for slug in providers:
+    async with AsyncSessionLocal() as db:
         try:
-            if slug in config_providers:
-                await public_ip_config_module.ingest_public_ip_from_config(db, slug)
-                logger.info(f"{slug} public IP rate ingestion completed successfully")
+            await public_ip_config_module.ingest_public_ip_from_config(db, slug)
+            await db.commit()
+            logger.info(f"{slug} public IP rate ingestion completed successfully")
         except Exception as e:
             logger.error(f"{slug} public IP ingestion failed: {e}", exc_info=True)
 
 
-async def _run_os_license_ingestion(db, provider: str) -> None:
-    """Run OS license rate ingestion from config."""
+async def _ingest_os_license_for_provider(slug: str) -> None:
+    """Run OS license ingestion for a single provider with its own DB session."""
     from connectors import os_license_config as os_license_config_module
 
-    providers = [provider] if provider != "all" else PROVIDERS_ALL
     config_providers = set(os_license_config_module.get_os_license_config_providers())
+    if slug not in config_providers:
+        return
 
-    for slug in providers:
+    async with AsyncSessionLocal() as db:
         try:
-            if slug in config_providers:
-                await os_license_config_module.ingest_os_license_from_config(db, slug)
-                logger.info(f"{slug} OS license rate ingestion completed successfully")
+            await os_license_config_module.ingest_os_license_from_config(db, slug)
+            await db.commit()
+            logger.info(f"{slug} OS license rate ingestion completed successfully")
         except Exception as e:
             logger.error(f"{slug} OS license ingestion failed: {e}", exc_info=True)
-
-
-async def _ensure_ingestion_providers(db) -> None:
-    """Ensure gcp and hetzner providers exist."""
-    await ensure_provider(
-        db,
-        slug="gcp",
-        name="Google Cloud",
-        website="https://cloud.google.com",
-        type=ProviderType.HYPERSCALER,
-    )
-    await ensure_provider(
-        db,
-        slug="hetzner",
-        name="Hetzner Cloud",
-        website="https://www.hetzner.com/cloud",
-        type=ProviderType.EU,
-    )
-    await db.flush()
 
 
 async def run_ingest(
@@ -221,135 +288,47 @@ async def run_ingest(
     all_costs: bool = False,
     costs_only: bool = False,
 ) -> None:
-    from connectors import aruba as aruba_conn
-    from connectors import aws as aws_conn
-    from connectors import azure as azure_conn
-    from connectors import digitalocean as digitalocean_conn
-    from connectors import gcp as gcp_conn
-    from connectors import hetzner as hetzner_conn
-    from connectors import ovh as ovh_conn
-    from connectors import scaleway as scaleway_conn
-    from connectors import seeweb as seeweb_conn
-
     if quick and region is None:
         region = "eu-west-1" if provider == "aws" else ("westeurope" if provider == "azure" else None)
 
     skip_instances = egress_only or costs_only
 
-    async with AsyncSessionLocal() as db:
-        await _ensure_ingestion_providers(db)
-        await db.commit()
+    # Parallel instance ingestion: each provider runs in its own session
+    if not skip_instances:
+        providers = _get_providers_to_ingest(provider)
+        tasks = [
+            _ingest_provider_instance(slug, only_eu, purchase_model, region if slug in ("aws", "azure") else None)
+            for slug in providers
+        ]
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for i, r in enumerate(results):
+                if isinstance(r, Exception):
+                    logger.error(f"{providers[i]} ingestion failed: {r}")
 
-    async with AsyncSessionLocal() as db:
-        # Ingest each provider independently, continuing on errors (skip when skip_instances)
-        if not skip_instances and provider in ("hetzner", "all"):
-            try:
-                await hetzner_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
-                logger.info("Hetzner ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Hetzner ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("gcp", "all"):
-            try:
-                await gcp_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
-                logger.info("GCP ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"GCP ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("aws", "all"):
-            try:
-                await aws_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                    region=region,
-                )
-                logger.info("AWS ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"AWS ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("azure", "all"):
-            try:
-                await azure_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                    region=region,
-                )
-                logger.info("Azure ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Azure ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("digitalocean", "all"):
-            try:
-                await digitalocean_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("DigitalOcean ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"DigitalOcean ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("scaleway", "all"):
-            try:
-                await scaleway_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("Scaleway ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Scaleway ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("ovh", "all"):
-            try:
-                await ovh_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("OVH ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"OVH ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("seeweb", "all"):
-            try:
-                await seeweb_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("Seeweb ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Seeweb ingestion failed: {e}", exc_info=True)
-        if not skip_instances and provider in ("aruba", "all"):
-            try:
-                await aruba_conn.ingest(
-                    db,
-                    only_eu=only_eu,
-                    purchase_model=purchase_model,
-                )
-                logger.info("Aruba ingestion completed successfully")
-            except Exception as e:
-                logger.error(f"Aruba ingestion failed: {e}", exc_info=True)
-        # Cost rate ingestion: egress, storage, public IP, OS license
-        # When egress_only or costs_only, skip instance ingestion; cost provider = all
-        cost_provider = "all" if (egress_only or costs_only) else provider
-        if egress or all_costs or egress_only:
-            await _run_egress_ingestion(db, cost_provider)
-        if storage or all_costs:
-            await _run_storage_ingestion(db, cost_provider)
-        if public_ip or all_costs:
-            await _run_public_ip_ingestion(db, cost_provider)
-        if os_license or all_costs:
-            await _run_os_license_ingestion(db, cost_provider)
-        await db.commit()
+    # Parallel cost ingestion: each provider runs in its own session
+    cost_providers = _get_providers_to_ingest("all" if (egress_only or costs_only) else provider)
+    cost_tasks: list = []
+    cost_task_info: list[tuple[str, str]] = []  # (cost_type, slug)
 
-    # After base GCP ingestion, compute machine type prices (skip when costs-only mode)
-    if not skip_instances and provider in ("gcp", "all"):
-        try:
-            from connectors import gcp_machine_types as gcp_machines_conn
+    if egress or all_costs or egress_only:
+        cost_tasks += [_ingest_egress_for_provider(slug) for slug in cost_providers]
+        cost_task_info += [("egress", slug) for slug in cost_providers]
+    if storage or all_costs:
+        cost_tasks += [_ingest_storage_for_provider(slug) for slug in cost_providers]
+        cost_task_info += [("storage", slug) for slug in cost_providers]
+    if public_ip or all_costs:
+        cost_tasks += [_ingest_public_ip_for_provider(slug) for slug in cost_providers]
+        cost_task_info += [("public_ip", slug) for slug in cost_providers]
+    if os_license or all_costs:
+        cost_tasks += [_ingest_os_license_for_provider(slug) for slug in cost_providers]
+        cost_task_info += [("os_license", slug) for slug in cost_providers]
 
-            async with AsyncSessionLocal() as db:
-                await gcp_machines_conn.ingest(db, only_eu=only_eu, purchase_model=purchase_model)
-                await db.commit()
-            logger.info("GCP machine types ingestion completed successfully")
-        except Exception as e:
-            logger.error(f"GCP machine types ingestion failed: {e}", exc_info=True)
+    if cost_tasks:
+        cost_results = await asyncio.gather(*cost_tasks, return_exceptions=True)
+        for (cost_type, slug), r in zip(cost_task_info, cost_results):
+            if isinstance(r, Exception):
+                logger.error(f"{slug} {cost_type} ingestion failed: {r}", exc_info=True)
 
     logger.info(
         "Ingestion completed",

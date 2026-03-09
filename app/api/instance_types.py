@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import InstanceType, Provider
@@ -33,15 +32,12 @@ async def list_instance_types(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[InstanceTypeResponse]:
-    """List instance types with filters and pagination (excludes test providers)."""
-    base = select(InstanceType).join(Provider, InstanceType.provider_id == Provider.id).where(
-        ~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%")
-    )
+    """List instance types with filters and pagination."""
+    base = select(InstanceType).join(Provider, InstanceType.provider_id == Provider.id)
     count_base = (
         select(func.count())
         .select_from(InstanceType)
         .join(Provider, InstanceType.provider_id == Provider.id)
-        .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
     )
 
     ref = _parse_provider_ref(provider)

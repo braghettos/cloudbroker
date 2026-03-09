@@ -10,7 +10,7 @@ DB_PASSWORD ?= cloudbroker-dev
 KIND_CLUSTER ?= cloudburst
 KIND_NODE_IMAGE ?= kindest/node:v1.34.3
 
-.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image
+.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-seeweb ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image seed-dr-hetzner-first
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -138,6 +138,9 @@ ingest-elastx: ## Ingest Elastx (config-based, no API keys)
 
 ingest-cyso-cloud: ## Ingest Cyso Cloud (config-based, no API keys)
 	$(PYTHON) -m apps.ingestor ingest --provider cyso_cloud
+
+ingest-seeweb: ## Ingest Seeweb (requires SEEWEB_API_TOKEN or SEEWEB_USERNAME + SEEWEB_PASSWORD)
+	$(PYTHON) -m apps.ingestor ingest --provider seeweb
 
 ingest-all: ## Ingest all providers
 	$(PYTHON) -m apps.ingestor ingest --provider all

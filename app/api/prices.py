@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import InstanceType, Price, Provider, Region
@@ -34,15 +33,12 @@ async def list_prices(
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[PriceResponse]:
-    """List prices with filters and pagination (excludes test providers)."""
-    # Join path: Price -> InstanceType, Price -> Region; Provider via InstanceType
-    exclude_test = ~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%")
+    """List prices with filters and pagination."""
     base = (
         select(Price)
         .join(InstanceType)
         .join(Region)
         .join(Provider, InstanceType.provider_id == Provider.id)
-        .where(exclude_test)
     )
     count_base = (
         select(func.count())
@@ -50,7 +46,6 @@ async def list_prices(
         .join(InstanceType)
         .join(Region)
         .join(Provider, InstanceType.provider_id == Provider.id)
-        .where(exclude_test)
     )
 
     provider_ref = _parse_id_or_slug(provider)

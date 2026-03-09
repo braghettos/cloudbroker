@@ -8,7 +8,6 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.constants import TEST_PROVIDER_PREFIX
 from app.models import (
     EgressRate,
     InstanceType,
@@ -660,7 +659,6 @@ class RecommendationService:
             )
             .join(Region, Price.region_id == Region.id)
             .join(Provider, InstanceType.provider_id == Provider.id)
-            .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
             .where(InstanceType.vcpu >= req.min_vcpu)
             .where(InstanceType.ram_gb >= req.min_ram_gb)
             .where(InstanceType.arch == arch_val)

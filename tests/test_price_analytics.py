@@ -11,10 +11,8 @@ import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import TEST_PROVIDER_PREFIX
 from app.main import app
 from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
@@ -26,6 +24,9 @@ from app.services.price_analytics import (
     validate_price_changes_data_quality,
 )
 from app.core.database import AsyncSessionLocal
+
+# Prefix for seeded test data (unique per run; rolled back, never persisted)
+_TEST_SLUG_PREFIX = "test-pa-"
 
 
 async def _seed_price_history(
@@ -39,7 +40,7 @@ async def _seed_price_history(
     """Seed provider, region, instance type, and two price rows. Returns created entities."""
     slug_suffix = str(uuid.uuid4())[:8]
     provider = Provider(
-        slug=f"{TEST_PROVIDER_PREFIX}provider-{slug_suffix}",
+        slug=f"{_TEST_SLUG_PREFIX}provider-{slug_suffix}",
         name="Test Provider",
         type=ProviderType.REGIONAL,
     )
@@ -48,7 +49,7 @@ async def _seed_price_history(
 
     region = Region(
         provider_id=provider.id,
-        slug=f"{TEST_PROVIDER_PREFIX}region-{slug_suffix}",
+        slug=f"{_TEST_SLUG_PREFIX}region-{slug_suffix}",
         name="Test Region",
         is_eu=True,
     )
@@ -57,7 +58,7 @@ async def _seed_price_history(
 
     it = InstanceType(
         provider_id=provider.id,
-        name=f"{TEST_PROVIDER_PREFIX}instance-{slug_suffix}",
+        name=f"{_TEST_SLUG_PREFIX}instance-{slug_suffix}",
         vcpu=2,
         ram_gb=4.0,
     )
@@ -83,22 +84,14 @@ async def _seed_price_history(
     return (provider, region, it)
 
 
-async def _cleanup_seeded(db: AsyncSession, provider: Provider) -> None:
-    """Remove seeded test data."""
-    await db.execute(delete(Price).where(Price.instance_type_id.in_(
-        select(InstanceType.id).where(InstanceType.provider_id == provider.id)
-    )))
-    await db.execute(delete(InstanceType).where(InstanceType.provider_id == provider.id))
-    await db.execute(delete(Region).where(Region.provider_id == provider.id))
-    await db.execute(delete(Provider).where(Provider.id == provider.id))
-    await db.flush()
-
-
 @pytest.fixture
 async def db_session():
-    """Provide a database session for tests."""
+    """Provide a database session for tests. Rolls back after each test so no data persists."""
     async with AsyncSessionLocal() as session:
-        yield session
+        try:
+            yield session
+        finally:
+            await session.rollback()
 
 
 @pytest.fixture
@@ -119,32 +112,22 @@ async def test_real_price_change_detected_correctly(db_session: AsyncSession):
         hours_ago_old=48,
         hours_ago_new=24,
     )
-    await db_session.commit()
     it_name, region_slug = it.name, region.slug
 
-    try:
-        # Use fresh session for read to avoid greenlet issues (include test data for validation)
-        async with AsyncSessionLocal() as read_db:
-            changes = await detect_price_changes(
-                read_db,
-                purchase_model=PurchaseModel.ON_DEMAND,
-                since=None,
-                exclude_test_providers=False,
-            )
+    changes = await detect_price_changes(
+        db_session,
+        purchase_model=PurchaseModel.ON_DEMAND,
+        since=None,
+    )
 
-        # Find our seeded change
-        our_changes = [c for c in changes if c.instance_type_name == it_name and c.region_slug == region_slug]
-        assert len(our_changes) >= 1, f"Expected at least one change for {it_name}, got {len(changes)} total"
+    our_changes = [c for c in changes if c.instance_type_name == it_name and c.region_slug == region_slug]
+    assert len(our_changes) >= 1, f"Expected at least one change for {it_name}, got {len(changes)} total"
 
-        c = our_changes[0]
-        assert c.old_price_eur_per_hour == pytest.approx(0.10, rel=1e-6)
-        assert c.new_price_eur_per_hour == pytest.approx(0.105, rel=1e-6)
-        assert c.price_change_percent == pytest.approx(5.0, rel=0.1)
-        assert c.price_change_eur_per_hour == pytest.approx(0.005, rel=1e-6)
-    finally:
-        async with AsyncSessionLocal() as cleanup_db:
-            await _cleanup_seeded(cleanup_db, provider)
-            await cleanup_db.commit()
+    c = our_changes[0]
+    assert c.old_price_eur_per_hour == pytest.approx(0.10, rel=1e-6)
+    assert c.new_price_eur_per_hour == pytest.approx(0.105, rel=1e-6)
+    assert c.price_change_percent == pytest.approx(5.0, rel=0.1)
+    assert c.price_change_eur_per_hour == pytest.approx(0.005, rel=1e-6)
 
 
 @pytest.mark.asyncio
@@ -157,28 +140,20 @@ async def test_suspicious_product_mix_flagged_by_validation(db_session: AsyncSes
         hours_ago_old=48,
         hours_ago_new=24,
     )
-    await db_session.commit()
     it_name = it.name
 
-    try:
-        async with AsyncSessionLocal() as read_db:
-            changes = await detect_price_changes(
-                read_db,
-                purchase_model=PurchaseModel.ON_DEMAND,
-                since=None,
-                exclude_test_providers=False,
-            )
+    changes = await detect_price_changes(
+        db_session,
+        purchase_model=PurchaseModel.ON_DEMAND,
+        since=None,
+    )
 
-        our_changes = [c for c in changes if c.instance_type_name == it_name]
-        assert len(our_changes) >= 1
+    our_changes = [c for c in changes if c.instance_type_name == it_name]
+    assert len(our_changes) >= 1
 
-        plausible, suspicious = validate_price_changes_data_quality(our_changes)
-        assert len(suspicious) >= 1, "10x change should be flagged as suspicious (possible product mix)"
-        assert any(abs(c.price_change_percent) > SUSPICIOUS_CHANGE_PERCENT for c in suspicious)
-    finally:
-        async with AsyncSessionLocal() as cleanup_db:
-            await _cleanup_seeded(cleanup_db, provider)
-            await cleanup_db.commit()
+    plausible, suspicious = validate_price_changes_data_quality(our_changes)
+    assert len(suspicious) >= 1, "10x change should be flagged as suspicious (possible product mix)"
+    assert any(abs(c.price_change_percent) > SUSPICIOUS_CHANGE_PERCENT for c in suspicious)
 
 
 @pytest.mark.asyncio
@@ -191,28 +166,20 @@ async def test_plausible_changes_pass_validation(db_session: AsyncSession):
         hours_ago_old=48,
         hours_ago_new=24,
     )
-    await db_session.commit()
     it_name = it.name
 
-    try:
-        async with AsyncSessionLocal() as read_db:
-            changes = await detect_price_changes(
-                read_db,
-                purchase_model=PurchaseModel.ON_DEMAND,
-                since=None,
-                exclude_test_providers=False,
-            )
+    changes = await detect_price_changes(
+        db_session,
+        purchase_model=PurchaseModel.ON_DEMAND,
+        since=None,
+    )
 
-        our_changes = [c for c in changes if c.instance_type_name == it_name]
-        assert len(our_changes) >= 1
+    our_changes = [c for c in changes if c.instance_type_name == it_name]
+    assert len(our_changes) >= 1
 
-        plausible, suspicious = validate_price_changes_data_quality(our_changes)
-        assert len(suspicious) == 0, "5% change should be plausible"
-        assert len(plausible) >= 1
-    finally:
-        async with AsyncSessionLocal() as cleanup_db:
-            await _cleanup_seeded(cleanup_db, provider)
-            await cleanup_db.commit()
+    plausible, suspicious = validate_price_changes_data_quality(our_changes)
+    assert len(suspicious) == 0, "5% change should be plausible"
+    assert len(plausible) >= 1
 
 
 @pytest.mark.asyncio

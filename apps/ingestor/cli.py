@@ -31,7 +31,7 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "open_telekom_cloud", "exoscale", "ionos", "gridscale", "stackit", "elastx", "cyso_cloud", "all"],
+        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "open_telekom_cloud", "exoscale", "ionos", "gridscale", "stackit", "elastx", "cyso_cloud", "seeweb", "all"],
         required=True,
         help="Provider to ingest",
     )
@@ -114,6 +114,7 @@ PROVIDERS_ALL = [
     "stackit",
     "elastx",
     "cyso_cloud",
+    "seeweb",
 ]
 
 
@@ -146,6 +147,7 @@ async def _ingest_provider_instance(
     from connectors import stackit as stackit_conn
     from connectors import elastx as elastx_conn
     from connectors import cyso_cloud as cyso_cloud_conn
+    from connectors import seeweb as seeweb_conn
 
     conn_map = {
         "aruba": aruba_conn,
@@ -164,6 +166,7 @@ async def _ingest_provider_instance(
         "stackit": stackit_conn,
         "elastx": elastx_conn,
         "cyso_cloud": cyso_cloud_conn,
+        "seeweb": seeweb_conn,
     }
     conn = conn_map.get(slug)
     if not conn:

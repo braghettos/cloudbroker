@@ -87,3 +87,10 @@ cyso_cloud:
   free_tier_gb_per_month: 0
   cross_region_eur_per_gb: 0.01
   cross_az_eur_per_gb: 0.01
+
+# seeweb: https://www.seeweb.it/cloud/
+seeweb:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01

@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import TEST_PROVIDER_PREFIX
 from app.core.logging import get_logger
-from app.models import InstanceType, Price, Provider, Region
+from app.models import InstanceType, Price, Region
 from app.models.price import PurchaseModel
 
 logger = get_logger(__name__)
@@ -53,7 +52,6 @@ async def detect_price_changes(
     db: AsyncSession,
     purchase_model: PurchaseModel | None = None,
     since: datetime.datetime | None = None,
-    exclude_test_providers: bool = True,
 ) -> list[PriceChange]:
     """Detect price changes by comparing current prices with previous prices.
 
@@ -61,7 +59,6 @@ async def detect_price_changes(
         db: Database session
         purchase_model: Filter by purchase model (None = all)
         since: Only check prices updated since this timestamp (None = check all)
-        exclude_test_providers: If True, exclude providers with slug starting with test prefix (default: True)
 
     Returns:
         List of price change events
@@ -74,14 +71,6 @@ async def detect_price_changes(
         Price.region_id,
         Price.purchase_model,
     ).distinct()
-
-    if exclude_test_providers:
-        stmt = (
-            stmt.select_from(Price)
-            .join(InstanceType, Price.instance_type_id == InstanceType.id)
-            .join(Provider, InstanceType.provider_id == Provider.id)
-            .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
-        )
 
     if purchase_model:
         stmt = stmt.where(Price.purchase_model == purchase_model)
@@ -160,7 +149,6 @@ async def analyze_price_trends(
     db: AsyncSession,
     purchase_model: PurchaseModel | None = None,
     days: int = 30,
-    exclude_test_providers: bool = True,
 ) -> list[PriceTrend]:
     """Analyze price trends over a time period.
 
@@ -168,7 +156,6 @@ async def analyze_price_trends(
         db: Database session
         purchase_model: Filter by purchase model (None = all)
         days: Number of days to analyze
-        exclude_test_providers: If True, exclude providers with slug starting with test prefix (default: True)
 
     Returns:
         List of price trend analyses
@@ -183,14 +170,6 @@ async def analyze_price_trends(
         Price.region_id,
         Price.purchase_model,
     ).distinct()
-
-    if exclude_test_providers:
-        stmt = (
-            stmt.select_from(Price)
-            .join(InstanceType, Price.instance_type_id == InstanceType.id)
-            .join(Provider, InstanceType.provider_id == Provider.id)
-            .where(~Provider.slug.like(f"{TEST_PROVIDER_PREFIX}%"))
-        )
 
     if purchase_model:
         stmt = stmt.where(Price.purchase_model == purchase_model)

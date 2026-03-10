@@ -10,7 +10,7 @@ DB_PASSWORD ?= cloudbroker-dev
 KIND_CLUSTER ?= cloudburst
 KIND_NODE_IMAGE ?= kindest/node:v1.34.3
 
-.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-seeweb ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image seed-dr-hetzner-first
+.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-verify ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-seeweb ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations check-scorecard-recommendations verify-gcp verify-hetzner verify-all verify-azure verify-otc verify-ovh verify-config docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image seed-dr-hetzner-first
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -46,6 +46,30 @@ format: ## Run ruff formatter
 test-recommendations: ## Test recommendations API endpoint
 	@./scripts/test_recommendations.sh
 
+check-scorecard-recommendations: ## Verify Scorecard analytics matches Recommendations API for same requirements
+	$(PYTHON) scripts/check_scorecard_recommendations_match.py
+
+verify-gcp: ## Verify GCP ingested prices match Billing Catalog API (run after ingest)
+	$(PYTHON) scripts/verify_gcp_ingestion.py
+
+verify-hetzner: ## Verify Hetzner ingested prices match Cloud API (run after ingest, requires HETZNER_API_TOKEN)
+	$(PYTHON) scripts/verify_hetzner_ingestion.py
+
+verify-all: ## Verify ingested prices for all providers (GCP, Hetzner, Azure, OTC, OVH, DO, AWS, Scaleway, UpCloud, Seeweb, config-based)
+	$(PYTHON) scripts/verify_all_ingestion.py
+
+verify-azure: ## Verify Azure ingested prices (public API, no auth)
+	$(PYTHON) scripts/verify_all_ingestion.py --provider azure
+
+verify-otc: ## Verify Open Telekom Cloud ingested prices (public API, no auth)
+	$(PYTHON) scripts/verify_all_ingestion.py --provider otc
+
+verify-ovh: ## Verify OVH ingested prices (public catalog, no auth)
+	$(PYTHON) scripts/verify_all_ingestion.py --provider ovh
+
+verify-config: ## Verify config-based providers (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso)
+	$(PYTHON) scripts/verify_all_ingestion.py --provider config
+
 test-e2e: ## Run e2e tests (requires: make up, make migrate, ingest, ingest --egress)
 	$(PYTHON) -m pytest tests/test_e2e_recommendations_tco.py -v -m e2e
 
@@ -75,6 +99,9 @@ migrate-revision: ## Create new migration (use: make migrate-revision msg='descr
 
 ingest-gcp: ## Ingest GCP Billing Catalog (requires ADC)
 	$(PYTHON) -m apps.ingestor ingest --provider gcp
+
+ingest-gcp-verify: ## Ingest GCP and verify prices match API (fails on mismatch with --verify-fail)
+	$(PYTHON) -m apps.ingestor ingest --provider gcp --only-eu true --verify
 
 ingest-gcp-machines: ## Compute GCP machine type prices from unit prices
 	$(PYTHON) -m apps.ingestor.machines

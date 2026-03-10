@@ -1,4 +1,10 @@
-"""GCP Billing Catalog connector (MVP): list Compute Engine SKUs, ingest as pseudo instance types."""
+"""GCP Billing Catalog connector (MVP): list Compute Engine SKUs, ingest as pseudo instance types.
+
+CloudBroker ingests Compute Engine VM pricing (per hour). Cloud Build uses the same machine
+types (e2-highcpu, etc.) but bills per minute (see https://cloud.google.com/build/pricing).
+We explicitly filter for the Compute Engine service only; per-minute SKUs are converted to
+hourly if ever encountered.
+"""
 
 from __future__ import annotations
 
@@ -78,6 +84,71 @@ def _is_preemptible_sku(sku) -> bool:
         return False
 
 
+def _is_base_on_demand_sku(sku) -> bool:
+    """Filter to base on-demand SKUs only; exclude CUD, commitments, sole tenancy premiums."""
+    try:
+        cat = sku.category
+        if not cat:
+            return False
+        ut = (cat.usage_type or "").upper()
+        # Only OnDemand; exclude Commit1Yr, Commit3Yr, CmtCudPremium, etc.
+        if ut != "ONDEMAND":
+            return False
+        desc = (sku.description or "").upper()
+        # Exclude add-on premiums and non-base SKUs
+        exclude = (
+            "PREMIUM",
+            "SOLE TENANCY",
+            "COMMITMENT",
+            "COMMITTED USE",
+            "RESERVED",
+            "DWS DEFINED DURATION",
+            "CALENDAR MODE",
+        )
+        for x in exclude:
+            if x in desc:
+                return False
+        return True
+    except Exception:
+        return False
+
+
+def _get_usage_unit(sku) -> str:
+    """Extract usageUnit from pricing expression (e.g. 'hour', 'min', 's')."""
+    try:
+        pi = sku.pricing_info
+        if not pi or len(pi) == 0:
+            return ""
+        expr = pi[0].pricing_expression
+        if not expr:
+            return ""
+        unit = (expr.usage_unit or "").strip().lower()
+        desc = (getattr(expr, "usage_unit_description", None) or "").strip().lower()
+        return unit or desc
+    except Exception:
+        return ""
+
+
+def _price_to_hourly(price_per_unit: float, usage_unit: str) -> float:
+    """
+    Convert price to hourly rate.
+
+    CloudBroker stores all prices as EUR/hour. GCP Billing Catalog:
+    - Compute Engine: typically per hour (or per gibibyte-hour)
+    - Cloud Build: per minute (see https://cloud.google.com/build/pricing)
+
+    We only ingest Compute Engine SKUs, but per-minute SKUs would be 60x too low
+    if stored as-is. This function converts per-minute to hourly.
+    """
+    u = usage_unit or ""
+    if "min" in u or "minute" in u:
+        return price_per_unit * 60
+    if "s" == u or "sec" in u or "second" in u:
+        return price_per_unit * 3600
+    # hour, hour gibibyte, etc. - assume already per hour
+    return price_per_unit
+
+
 def _extract_unit_price_nanos(sku) -> tuple[str, float] | None:
     """Extract currency and price per unit from first tiered rate. Price in nanos -> units."""
     try:
@@ -96,7 +167,16 @@ def _extract_unit_price_nanos(sku) -> tuple[str, float] | None:
         total_units = int(units) + (int(nanos) / 1e9)
         if total_units <= 0:
             return None
-        return (currency, total_units)
+        usage_unit = _get_usage_unit(sku)
+        price_per_hour = _price_to_hourly(total_units, usage_unit)
+        if usage_unit and ("min" in usage_unit or "minute" in usage_unit):
+            logger.warning(
+                "GCP SKU has per-minute pricing (e.g. Cloud Build); converted to hourly. "
+                "CloudBroker ingests Compute Engine only - per-minute SKUs should not appear.",
+                sku_name=getattr(sku, "name", ""),
+                usage_unit=usage_unit,
+            )
+        return (currency, price_per_hour)
     except Exception:
         return None
 
@@ -208,6 +288,9 @@ async def ingest(
         if purchase == PurchaseModel.ON_DEMAND and is_preemptible:
             continue
         if purchase == PurchaseModel.SPOT and not is_preemptible:
+            continue
+        # On-demand: only base SKUs (exclude CUD premiums, commitments, sole tenancy)
+        if purchase == PurchaseModel.ON_DEMAND and not _is_base_on_demand_sku(sku):
             continue
         price_info = _extract_unit_price_nanos(sku)
         if not price_info:

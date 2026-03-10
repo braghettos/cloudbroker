@@ -94,6 +94,16 @@ def _parse() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip instance/price ingestion; only ingest cost rates (egress, storage, etc.).",
     )
+    ing.add_argument(
+        "--verify",
+        action="store_true",
+        help="After GCP ingestion, verify stored prices match the Billing Catalog API.",
+    )
+    ing.add_argument(
+        "--verify-fail",
+        action="store_true",
+        help="With --verify: raise on verification failure (default: log and continue).",
+    )
     return p
 
 
@@ -290,6 +300,8 @@ async def run_ingest(
     os_license: bool = False,
     all_costs: bool = False,
     costs_only: bool = False,
+    verify: bool = False,
+    verify_fail: bool = False,
 ) -> None:
     if quick and region is None:
         region = "eu-west-1" if provider == "aws" else ("westeurope" if provider == "azure" else None)
@@ -333,6 +345,30 @@ async def run_ingest(
             if isinstance(r, Exception):
                 logger.error(f"{slug} {cost_type} ingestion failed: {r}", exc_info=True)
 
+    if verify and not skip_instances:
+        providers_ingested = _get_providers_to_ingest(provider)
+        if "gcp" in providers_ingested:
+            from connectors import gcp_verify
+
+            async with AsyncSessionLocal() as db:
+                try:
+                    results = await gcp_verify.verify_ingested_prices(
+                        db,
+                        only_eu=only_eu,
+                        purchase_model=purchase_model,
+                        fail_on_mismatch=verify_fail,
+                    )
+                    for r in results:
+                        if r.passed:
+                            logger.info("GCP verify: %s", r.message)
+                        else:
+                            logger.error("GCP verify FAIL: %s", r.message)
+                            if r.details:
+                                logger.error("Details: %s", r.details)
+                except RuntimeError as e:
+                    logger.error("GCP verification failed: %s", e)
+                    raise
+
     logger.info(
         "Ingestion completed",
         provider=provider,
@@ -361,6 +397,8 @@ def main() -> int:
             os_license=args.os_license,
             all_costs=args.all_costs,
             costs_only=args.costs_only,
+            verify=args.verify,
+            verify_fail=args.verify_fail,
         )
     )
     return 0

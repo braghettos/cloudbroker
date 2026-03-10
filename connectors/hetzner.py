@@ -31,6 +31,10 @@ EU_LOCATION_NAMES = {"fsn1", "nbg1", "hel1"}  # Falkenstein, Nuremberg, Helsinki
 HETZNER_TIMEOUT = 60.0
 HETZNER_FETCH_RETRIES = 3
 
+# Primary IPv4 add-on: API returns base (IPv6-only) price; website shows server+IPv4.
+# https://docs.hetzner.com/general/infrastructure-and-availability/ipv4-pricing/
+HETZNER_PRIMARY_IPV4_EUR_PER_HOUR = Decimal("0.0008")
+
 
 async def _fetch_locations(token: str) -> list[dict]:
     last_err = None
@@ -199,9 +203,11 @@ async def ingest(
         )
         for c in canonical:
             region = region_by_slug[c["location"]]
-            eur_per_hour = c["price"]
-            if eur_per_hour is None or eur_per_hour < 0:
+            base_eur = c["price"]
+            if base_eur is None or base_eur < 0:
                 continue
+            # Add primary IPv4 so displayed price matches website (server+IPv4 default)
+            eur_per_hour = float(Decimal(str(base_eur)) + HETZNER_PRIMARY_IPV4_EUR_PER_HOUR)
             p = await append_price(
                 db,
                 instance_type_id=it.id,

@@ -205,6 +205,9 @@ Run `make help` for the full list. Key targets:
 | `make ingest-public-ip` | Ingest public IP rates (costs only) |
 | `make ingest-os-license` | Ingest OS license rates (costs only) |
 | `make ingest-all-costs` | Ingest all cost rates (egress, storage, public IP, OS license) |
+| `make verify-gcp` | Verify GCP ingested prices match Billing Catalog API |
+| `make verify-hetzner` | Verify Hetzner ingested prices match Cloud API |
+| `make verify-all` | Verify ingested prices for all supported providers |
 | `make seed-dr-hetzner-first` | Seed DB so Hetzner ranks first (for DR failover test) |
 | `make test-exhaustive` | Run full recommendation param matrix (~440 tests) |
 | `make migrate-down` | Rollback one Alembic migration |
@@ -265,10 +268,23 @@ curl -s -X POST http://localhost:8000/api/recommendations \
 # explain includes tco_eur_per_hour, egress_cost_eur_per_hour, storage_cost_eur_per_hour, etc.
 ```
 
+## Pricing data sources & verification
+
+CloudBroker ingests from provider APIs or config. To double-check ingested prices:
+
+| Command | Description |
+|---------|-------------|
+| `make verify-gcp` | Verify GCP prices match Billing Catalog API (requires ADC) |
+| `make verify-hetzner` | Verify Hetzner prices match Cloud API (requires `HETZNER_API_TOKEN`) |
+| `make verify-all` | Run all provider verifications |
+
+See [docs/PRICING_DATA_SOURCES.md](docs/PRICING_DATA_SOURCES.md) for the full list of APIs and docs used per provider (GCP Billing Catalog, AWS Price List, Azure Retail Prices, Hetzner Cloud API, etc.).
+
 ## Documentation
 
 - [Article series](docs/articles/) &mdash; four-part intro (problem and product, how it works, interface, scope and run)
 - [Architecture](docs/architecture.md) &mdash; data model, recommendation engine, ingestion pipeline, and integration with Cloudburst
+- [Pricing data sources](docs/PRICING_DATA_SOURCES.md) &mdash; APIs and docs used for each provider; verification commands
 - [Usage Guide](USAGE_GUIDE.md) &mdash; API examples and workflows
 - **Swagger UI**: http://localhost:8000/docs (when running)
 

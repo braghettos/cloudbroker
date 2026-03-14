@@ -287,6 +287,21 @@ async def ingest(
 
         family = _infer_family(flavor_name)
 
+        # GPU count: OVH GPU flavors use g-prefix (e.g. g-1-1, g-4-32) or gpu-* names
+        gpu_count: int | None = None
+        gpu_model: str | None = None
+        prefix = flavor_name.split("-")[0].lower() if "-" in flavor_name else flavor_name.lower()
+        if prefix in ("g", "gpu"):
+            # OVH GPU flavors: g-1-1 = 1 GPU; name encodes GPU count as first number after prefix
+            parts = flavor_name.split("-")
+            if len(parts) >= 2:
+                try:
+                    gpu_count = int(parts[1])
+                except (ValueError, IndexError):
+                    gpu_count = 1
+            else:
+                gpu_count = 1
+
         it = await ensure_instance_type(
             db,
             provider_id=provider.id,
@@ -295,6 +310,8 @@ async def ingest(
             ram_gb=ram_gb,
             family=family,
             arch=arch,
+            gpu_count=gpu_count,
+            gpu_model=gpu_model,
         )
         await db.flush()
         instance_types_seen.add(flavor_name)

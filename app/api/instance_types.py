@@ -1,9 +1,12 @@
 """Instance type list endpoint."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.utils import parse_id_or_slug
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import InstanceType, Provider
@@ -13,14 +16,6 @@ from app.schemas.instance_type import InstanceTypeResponse
 router = APIRouter(prefix="/instance-types", tags=["instance-types"])
 
 
-def _parse_provider_ref(provider: str | None) -> int | str | None:
-    if provider is None:
-        return None
-    if provider.isdigit():
-        return int(provider)
-    return provider
-
-
 @router.get("", response_model=PaginatedResponse[InstanceTypeResponse])
 async def list_instance_types(
     db: AsyncSession = Depends(get_db),
@@ -28,7 +23,7 @@ async def list_instance_types(
     provider: str | None = Query(None, description="Provider slug or id"),
     min_vcpu: int | None = Query(None, ge=1),
     min_ram_gb: float | None = Query(None, gt=0),
-    arch: str | None = Query(None),
+    arch: Literal["x86_64", "arm64"] | None = Query(None, description="CPU architecture filter"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[InstanceTypeResponse]:
@@ -40,7 +35,7 @@ async def list_instance_types(
         .join(Provider, InstanceType.provider_id == Provider.id)
     )
 
-    ref = _parse_provider_ref(provider)
+    ref = parse_id_or_slug(provider)
     if ref is not None:
         if isinstance(ref, int):
             base = base.where(InstanceType.provider_id == ref)

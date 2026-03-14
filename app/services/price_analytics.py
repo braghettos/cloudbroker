@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, literal_column, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -55,84 +55,93 @@ async def detect_price_changes(
 ) -> list[PriceChange]:
     """Detect price changes by comparing current prices with previous prices.
 
-    Args:
-        db: Database session
-        purchase_model: Filter by purchase model (None = all)
-        since: Only check prices updated since this timestamp (None = check all)
-
-    Returns:
-        List of price change events
+    Uses a window function (ROW_NUMBER) to fetch the two most recent prices
+    per (instance_type, region, purchase_model) in a single query, joined
+    with instance type and region names to avoid N+1.
     """
-    changes = []
+    rn = (
+        func.row_number()
+        .over(
+            partition_by=[Price.instance_type_id, Price.region_id, Price.purchase_model],
+            order_by=Price.timestamp.desc(),
+        )
+        .label("rn")
+    )
 
-    # Get all unique combinations
-    stmt = select(
+    inner = select(
         Price.instance_type_id,
         Price.region_id,
         Price.purchase_model,
-    ).distinct()
+        Price.price_eur_per_hour,
+        Price.timestamp,
+        rn,
+    )
 
     if purchase_model:
-        stmt = stmt.where(Price.purchase_model == purchase_model)
+        inner = inner.where(Price.purchase_model == purchase_model)
+    if since:
+        inner = inner.where(Price.timestamp >= since)
 
-    combinations = await db.execute(stmt)
+    inner = inner.subquery()
 
-    for combo in combinations:
-        instance_type_id, region_id, purchase_model_val = combo
-
-        # Get two most recent prices for this combination
-        prices_stmt = (
-            select(Price.price_eur_per_hour, Price.timestamp)
-            .where(Price.instance_type_id == instance_type_id)
-            .where(Price.region_id == region_id)
-            .where(Price.purchase_model == purchase_model_val)
-            .order_by(Price.timestamp.desc())
-            .limit(2)
+    stmt = (
+        select(
+            inner.c.instance_type_id,
+            inner.c.region_id,
+            inner.c.purchase_model,
+            inner.c.price_eur_per_hour,
+            inner.c.timestamp,
+            inner.c.rn,
+            InstanceType.name.label("instance_type_name"),
+            Region.slug.label("region_slug"),
         )
+        .join(InstanceType, InstanceType.id == inner.c.instance_type_id)
+        .join(Region, Region.id == inner.c.region_id)
+        .where(inner.c.rn <= 2)
+        .order_by(
+            inner.c.instance_type_id,
+            inner.c.region_id,
+            inner.c.purchase_model,
+            inner.c.rn,
+        )
+    )
 
-        if since:
-            prices_stmt = prices_stmt.where(Price.timestamp >= since)
+    result = await db.execute(stmt)
+    rows = result.all()
 
-        prices_result = await db.execute(prices_stmt)
-        prices = prices_result.all()
+    grouped: dict[tuple, list] = {}
+    for row in rows:
+        key = (row.instance_type_id, row.region_id, row.purchase_model)
+        grouped.setdefault(key, []).append(row)
 
-        if len(prices) < 2:
-            # Need at least 2 data points to detect a change
+    changes = []
+    for (_it_id, _r_id, _pm), group in grouped.items():
+        if len(group) < 2:
             continue
 
-        latest_price, latest_ts = prices[0]
-        previous_price, previous_ts = prices[1]
+        latest = group[0] if group[0].rn == 1 else group[1]
+        previous = group[1] if group[0].rn == 1 else group[0]
 
-        # Skip if prices are the same (within small tolerance for floating point)
-        if latest_price is None or previous_price is None:
+        if latest.price_eur_per_hour is None or previous.price_eur_per_hour is None:
+            continue
+        if abs(latest.price_eur_per_hour - previous.price_eur_per_hour) < 0.0001:
             continue
 
-        if abs(latest_price - previous_price) < 0.0001:  # Less than 0.0001 EUR difference
-            continue
-
-        # Calculate change
-        price_change_eur = latest_price - previous_price
-        price_change_percent = (price_change_eur / previous_price) * 100.0
-
-        # Get instance type and region names
-        it_result = await db.execute(select(InstanceType.name).where(InstanceType.id == instance_type_id))
-        instance_type_name = it_result.scalar_one_or_none() or f"ID:{instance_type_id}"
-
-        region_result = await db.execute(select(Region.slug).where(Region.id == region_id))
-        region_slug = region_result.scalar_one_or_none() or f"ID:{region_id}"
+        price_change_eur = latest.price_eur_per_hour - previous.price_eur_per_hour
+        price_change_percent = (price_change_eur / previous.price_eur_per_hour) * 100.0
 
         changes.append(
             PriceChange(
-                instance_type_id=instance_type_id,
-                instance_type_name=instance_type_name,
-                region_id=region_id,
-                region_slug=region_slug,
-                purchase_model=purchase_model_val,
-                old_price_eur_per_hour=previous_price,
-                new_price_eur_per_hour=latest_price,
+                instance_type_id=latest.instance_type_id,
+                instance_type_name=latest.instance_type_name,
+                region_id=latest.region_id,
+                region_slug=latest.region_slug,
+                purchase_model=latest.purchase_model,
+                old_price_eur_per_hour=previous.price_eur_per_hour,
+                new_price_eur_per_hour=latest.price_eur_per_hour,
                 price_change_eur_per_hour=price_change_eur,
                 price_change_percent=price_change_percent,
-                timestamp=latest_ts,
+                timestamp=latest.timestamp,
             )
         )
 
@@ -152,60 +161,115 @@ async def analyze_price_trends(
 ) -> list[PriceTrend]:
     """Analyze price trends over a time period.
 
-    Args:
-        db: Database session
-        purchase_model: Filter by purchase model (None = all)
-        days: Number of days to analyze
-
-    Returns:
-        List of price trend analyses
+    Uses aggregate functions (MIN/MAX timestamp, FIRST/LAST price via subqueries)
+    in a single query to avoid N+1.
     """
     since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
 
-    trends = []
+    first_rn = (
+        func.row_number()
+        .over(
+            partition_by=[Price.instance_type_id, Price.region_id, Price.purchase_model],
+            order_by=Price.timestamp.asc(),
+        )
+        .label("rn")
+    )
+    last_rn = (
+        func.row_number()
+        .over(
+            partition_by=[Price.instance_type_id, Price.region_id, Price.purchase_model],
+            order_by=Price.timestamp.desc(),
+        )
+        .label("rn_desc")
+    )
 
-    # Get all unique combinations
-    stmt = select(
+    base_filter = Price.timestamp >= since
+    if purchase_model:
+        base_filter = (Price.timestamp >= since) & (Price.purchase_model == purchase_model)
+
+    inner = select(
         Price.instance_type_id,
         Price.region_id,
         Price.purchase_model,
-    ).distinct()
+        Price.price_eur_per_hour,
+        Price.timestamp,
+        first_rn,
+        last_rn,
+    ).where(base_filter).subquery()
 
-    if purchase_model:
-        stmt = stmt.where(Price.purchase_model == purchase_model)
-
-    combinations = await db.execute(stmt)
-
-    for combo in combinations:
-        instance_type_id, region_id, purchase_model = combo
-
-        # Get all prices for this combination within the time period
-        prices_result = await db.execute(
-            select(Price.price_eur_per_hour, Price.timestamp)
-            .where(Price.instance_type_id == instance_type_id)
-            .where(Price.region_id == region_id)
-            .where(Price.purchase_model == purchase_model)
-            .where(Price.timestamp >= since)
-            .order_by(Price.timestamp.asc())
+    count_sub = (
+        select(
+            inner.c.instance_type_id,
+            inner.c.region_id,
+            inner.c.purchase_model,
+            func.count(literal_column("*")).label("data_points"),
         )
+        .group_by(inner.c.instance_type_id, inner.c.region_id, inner.c.purchase_model)
+        .having(func.count(literal_column("*")) >= 2)
+        .subquery()
+    )
 
-        prices = prices_result.all()
+    first_sub = (
+        select(
+            inner.c.instance_type_id,
+            inner.c.region_id,
+            inner.c.purchase_model,
+            inner.c.price_eur_per_hour.label("first_price"),
+            inner.c.timestamp.label("first_timestamp"),
+        )
+        .where(inner.c.rn == 1)
+        .subquery()
+    )
 
-        if len(prices) < 2:
-            # Need at least 2 data points for trend analysis
+    last_sub = (
+        select(
+            inner.c.instance_type_id,
+            inner.c.region_id,
+            inner.c.purchase_model,
+            inner.c.price_eur_per_hour.label("latest_price"),
+            inner.c.timestamp.label("latest_timestamp"),
+        )
+        .where(inner.c.rn_desc == 1)
+        .subquery()
+    )
+
+    stmt = (
+        select(
+            count_sub.c.instance_type_id,
+            count_sub.c.region_id,
+            count_sub.c.purchase_model,
+            count_sub.c.data_points,
+            first_sub.c.first_price,
+            first_sub.c.first_timestamp,
+            last_sub.c.latest_price,
+            last_sub.c.latest_timestamp,
+        )
+        .join(
+            first_sub,
+            (count_sub.c.instance_type_id == first_sub.c.instance_type_id)
+            & (count_sub.c.region_id == first_sub.c.region_id)
+            & (count_sub.c.purchase_model == first_sub.c.purchase_model),
+        )
+        .join(
+            last_sub,
+            (count_sub.c.instance_type_id == last_sub.c.instance_type_id)
+            & (count_sub.c.region_id == last_sub.c.region_id)
+            & (count_sub.c.purchase_model == last_sub.c.purchase_model),
+        )
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    trends = []
+    for row in rows:
+        if row.first_price is None or row.latest_price is None:
             continue
 
-        first_price, first_ts = prices[0]
-        latest_price, latest_ts = prices[-1]
+        price_change_eur = row.latest_price - row.first_price
+        price_change_percent = (price_change_eur / row.first_price) * 100.0 if row.first_price else 0.0
 
-        if first_price is None or latest_price is None:
-            continue
-
-        price_change_eur = latest_price - first_price
-        price_change_percent = (price_change_eur / first_price) * 100.0
-
-        # Determine trend direction
-        if abs(price_change_percent) < 0.1:  # Less than 0.1% change = stable
+        if abs(price_change_percent) < 0.1:
             trend_direction = "stable"
         elif price_change_percent > 0:
             trend_direction = "increasing"
@@ -214,17 +278,17 @@ async def analyze_price_trends(
 
         trends.append(
             PriceTrend(
-                instance_type_id=instance_type_id,
-                region_id=region_id,
-                purchase_model=purchase_model,
+                instance_type_id=row.instance_type_id,
+                region_id=row.region_id,
+                purchase_model=row.purchase_model,
                 trend_direction=trend_direction,
                 price_change_percent=price_change_percent,
                 price_change_eur_per_hour=price_change_eur,
-                first_price=first_price,
-                latest_price=latest_price,
-                first_timestamp=first_ts,
-                latest_timestamp=latest_ts,
-                data_points=len(prices),
+                first_price=row.first_price,
+                latest_price=row.latest_price,
+                first_timestamp=row.first_timestamp,
+                latest_timestamp=row.latest_timestamp,
+                data_points=row.data_points,
             )
         )
 

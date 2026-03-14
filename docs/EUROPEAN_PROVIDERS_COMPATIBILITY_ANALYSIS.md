@@ -3,7 +3,7 @@
 **Source:** [European Alternatives - Cloud Computing Platforms](https://european-alternatives.eu/category/cloud-computing-platforms)  
 **Date:** February 2025
 
-This document analyzes 12 European cloud providers listed on European Alternatives and assesses their compatibility with CloudBroker (pricing ingestion + recommendation API) and Cloudburst (Kubernetes burst node provisioning).
+This document analyzes European cloud providers listed on European Alternatives and assesses their compatibility with CloudBroker (pricing ingestion + recommendation API) and Cloudburst (Kubernetes burst node provisioning).
 
 ---
 
@@ -15,13 +15,7 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 | **OVHcloud** | France | ✅ Supported | ✅ Supported | — | Already integrated |
 | **UpCloud** | Finland | 🟢 High | 🟢 High | Low | REST API, plans + pricing endpoints |
 | **Exoscale** | Switzerland | 🟢 High | 🟢 High | Low | APIv2, instance types documented |
-| **gridscale** | Germany | 🟢 High | 🟢 High | Low | REST API, cloud-init, Python client |
-| **IONOS** | Germany | 🟢 High | 🟢 High | Medium | Cloud API v6, pricing page |
 | **Aruba Cloud** | Italy | 🟢 High | 🟢 High | Low | REST API, was previously in CloudBroker |
-| **Elastx** | Sweden | 🟡 Medium | 🟡 Medium | Medium | OpenStack Nova; pricing may need scraping |
-| **Cyso Cloud** | Netherlands | 🟡 Medium | 🟡 Medium | Medium | OpenStack-based; similar to OVH/Scaleway |
-| **Open Telekom Cloud** | Germany | 🟡 Medium | 🟡 Medium | Medium | OpenStack; pricing API exists |
-| **STACKIT** | Germany | 🟡 Medium | 🟡 Medium | Medium | IaaS API; pricing structure differs |
 
 ---
 
@@ -85,36 +79,9 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 5. gridscale (Germany) — 🟢 High Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **API** | REST API; Python client `gridscale_api_client_python` on GitHub |
-| **Pricing** | Transparent, per-minute; €10.53/month base; consumption charts |
-| **Provisioning** | Real-time; user-data/cloud-init supported |
-| **Regions** | Germany, Austria, Switzerland, Netherlands |
-| **Auth** | User UUID + API Token |
-
-**CloudBroker:** Pricing may require API or config-based ingestion. Effort: **Low–Medium**.  
-**Cloudburst:** Libcloud driver exists; cloud-init supported. Effort: **Low**.
-
 ---
 
-### 6. IONOS (Germany) — 🟢 High Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **API** | Cloud API v6 (`api.ionos.com/docs/cloud/v6/`); Server API for create/delete |
-| **Instance types** | Basic Cube XS/S/M/L (1–8 vCPU, 2–16 GB RAM) |
-| **Pricing** | Per-minute; Cloud Price Calculator; pricing page available |
-| **Auth** | API credentials |
-
-**CloudBroker:** Pricing page + calculator; may need config or scrape. Effort: **Medium**.  
-**Cloudburst:** Full CRUD API for servers. Effort: **Low**.
-
----
-
-### 7. Aruba Cloud (Italy) — 🟢 High Compatibility
+### 6. Aruba Cloud (Italy) — 🟢 High Compatibility
 
 | Aspect | Details |
 |-------|---------|
@@ -130,60 +97,6 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 
 ---
 
-### 8. Elastx (Sweden) — 🟡 Medium Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **Platform** | OpenStack (Nova compute) |
-| **API** | Standard OpenStack REST; application credentials |
-| **Regions** | 3 AZs in Sweden (20 km apart) |
-| **Pricing** | Not clearly exposed via API; may need manual config or scraping |
-
-**CloudBroker:** OpenStack doesn’t typically expose pricing via API. Config-based or scrape. Effort: **Medium**.  
-**Cloudburst:** OpenStack Nova is well-understood; similar to OVH/Cyso. Effort: **Medium**.
-
----
-
-### 9. Cyso Cloud (Netherlands) — 🟡 Medium Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **Platform** | OpenStack (Nova, Keystone) |
-| **API** | Keystone + Nova; X-Auth-Token |
-| **Regions** | Amsterdam (ams2), Frankfurt (fra) |
-| **Pricing** | OpenStack; likely config or scrape |
-
-**CloudBroker:** Same OpenStack pricing constraints as Elastx. Effort: **Medium**.  
-**Cloudburst:** Standard OpenStack Nova. Effort: **Medium**.
-
----
-
-### 10. Open Telekom Cloud (Germany) — 🟡 Medium Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **Platform** | OpenStack (Deutsche Telekom) |
-| **API** | OpenStack + Pricing API (`docs.otc.t-systems.com/price-calculator/api-ref/`) |
-| **Pricing** | Pay-as-you-go hourly; Price Calculator API |
-| **Regions** | German data centers |
-
-**CloudBroker:** Pricing API exists; more structured than typical OpenStack. Effort: **Medium**.  
-**Cloudburst:** OpenStack Nova. Effort: **Medium**.
-
----
-
-### 11. STACKIT (Germany) — 🟡 Medium Compatibility
-
-| Aspect | Details |
-|-------|---------|
-| **API** | STACKIT IaaS API; Terraform provider |
-| **Instance types** | XS–XL; General Use, Processor Optimized, RAM Optimized |
-| **Regions** | Germany, Austria |
-| **Pricing** | Sovereign EU cloud; structure may differ from standard hourly model |
-
-**CloudBroker:** Need to verify pricing API or docs. Effort: **Medium**.  
-**Cloudburst:** IaaS API for VM create/delete. Effort: **Medium**.
-
 ---
 
 ## Recommended Integration Order
@@ -194,14 +107,6 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 ### Tier 2 — Strong API support
 2. **UpCloud** — Plans + pricing API; clear data model
 3. **Exoscale** — APIv2; instance types documented
-4. **gridscale** — REST API, cloud-init, Python client
-
-### Tier 3 — More integration work
-5. **IONOS** — Mature API; pricing may need config
-6. **Open Telekom Cloud** — Pricing API + OpenStack
-7. **Elastx** — OpenStack; pricing config-based
-9. **Cyso Cloud** — OpenStack
-10. **STACKIT** — IaaS API; verify pricing model
 
 ---
 
@@ -211,10 +116,4 @@ This document analyzes 12 European cloud providers listed on European Alternativ
 - [UpCloud API - Plans](https://developers.upcloud.com/1.2/7-plans/)
 - [UpCloud API - Pricing](https://developers.upcloud.com/1.2/4-pricing/)
 - [Exoscale APIv2](https://openapi-v2.exoscale.com/)
-- [gridscale API](https://github.com/gridscale/gridscale_api_client_python)
-- [IONOS Cloud API v6](https://api.ionos.com/docs/cloud/v6/)
 - [Aruba Cloud API](https://api.arubacloud.com/)
-- [Elastx OpenStack](https://docs.elastx.cloud/docs/openstack-iaas/guides/api_access/)
-- [Cyso Cloud API](https://cyso.cloud/docs/cloud/how-to-get-started-with-the-cyso-cloud-api/)
-- [Open Telekom Cloud Pricing API](https://docs.otc.t-systems.com/price-calculator/api-ref/)
-- [STACKIT Docs](https://docs.stackit.cloud/)

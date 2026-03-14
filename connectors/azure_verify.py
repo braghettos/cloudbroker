@@ -21,7 +21,7 @@ from connectors.azure import (
     _fetch_retail_prices_page,
     _is_linux_product,
     _is_spot_vm_item,
-    parse_azure_vm_specs,
+    parse_azure_vm_specs_heuristic,
 )
 
 logger = get_logger(__name__)

@@ -1,50 +1,36 @@
 """Health check endpoint."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal
+from app.core.database import get_db
 from app.core.logging import get_logger
+from app.schemas.health import HealthCheckDetail, HealthResponse
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+router = APIRouter(tags=["health"])
 
 
-async def check_database() -> dict[str, str]:
-    """Check database connectivity."""
+async def _check_database(db: AsyncSession) -> HealthCheckDetail:
+    """Check database connectivity via the standard session."""
     try:
-        async with AsyncSessionLocal() as db:
-            await db.execute(text("SELECT 1"))
-        return {"status": "ok"}
+        await db.execute(text("SELECT 1"))
+        return HealthCheckDetail(status="ok")
     except Exception as e:
         logger.error("Database health check failed", error=str(e))
-        return {"status": "error", "error": str(e)}
+        return HealthCheckDetail(status="error", error=str(e))
 
 
-@router.get("/health", summary="Health check")
-async def health() -> dict:
-    """
-    Health check endpoint with detailed status.
+@router.get("/health", summary="Health check", response_model=HealthResponse)
+async def health(db: AsyncSession = Depends(get_db)) -> HealthResponse:
+    """Health check endpoint with detailed status."""
+    db_check = await _check_database(db)
 
-    Returns:
-        {
-            "status": "ok|degraded|down",
-            "checks": {
-                "database": {"status": "ok|error", ...}
-            }
-        }
-    """
-    checks = {}
-    overall_status = "ok"
+    overall_status = "ok" if db_check.status == "ok" else "degraded"
 
-    # Check database
-    db_check = await check_database()
-    checks["database"] = db_check
-    if db_check["status"] != "ok":
-        overall_status = "degraded" if overall_status == "ok" else "down"
-
-    return {
-        "status": overall_status,
-        "checks": checks,
-    }
+    return HealthResponse(
+        status=overall_status,
+        checks={"database": db_check},
+    )

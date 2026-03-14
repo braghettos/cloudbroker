@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 
 RELTOL = 0.02
 SAMPLE_REGION = "eu-west-1"
-SAMPLE_TYPES = ["t3.micro", "t3.small"]
+SAMPLE_TYPES = ["t3.micro", "t3.small", "t3.medium", "t3.large"]
 
 
 @dataclass
@@ -67,10 +67,11 @@ async def verify_ingested_prices(
         results.append(VerificationResult(passed=False, message=f"AWS Price API failed: {e}"))
         return results
 
+    # Use first-seen price per instance type — matches append_price idempotency (first wins per hour)
     api_prices: dict[str, float] = {}
     for attrs, price_usd in api_results:
         itype = (attrs.get("instanceType") or "").strip()
-        if itype in SAMPLE_TYPES:
+        if itype in SAMPLE_TYPES and itype not in api_prices:
             api_prices[itype] = price_usd
 
     rate_usd_eur = await get_rate_to_eur(db, "USD")

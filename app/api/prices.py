@@ -1,9 +1,12 @@
 """Price list endpoint."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.utils import parse_id_or_slug
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import InstanceType, Price, Provider, Region
@@ -11,14 +14,6 @@ from app.schemas.common import PaginatedResponse
 from app.schemas.price import PriceResponse
 
 router = APIRouter(prefix="/prices", tags=["prices"])
-
-
-def _parse_id_or_slug(value: str | None) -> int | str | None:
-    if value is None:
-        return None
-    if value.isdigit():
-        return int(value)
-    return value
 
 
 @router.get("", response_model=PaginatedResponse[PriceResponse])
@@ -29,7 +24,7 @@ async def list_prices(
     region: str | None = Query(None, description="Region slug or id"),
     min_vcpu: int | None = Query(None, ge=1),
     min_ram_gb: float | None = Query(None, gt=0),
-    arch: str | None = Query(None),
+    arch: Literal["x86_64", "arm64"] | None = Query(None, description="CPU architecture filter"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[PriceResponse]:
@@ -48,7 +43,7 @@ async def list_prices(
         .join(Provider, InstanceType.provider_id == Provider.id)
     )
 
-    provider_ref = _parse_id_or_slug(provider)
+    provider_ref = parse_id_or_slug(provider)
     if provider_ref is not None:
         if isinstance(provider_ref, int):
             base = base.where(Provider.id == provider_ref)
@@ -57,7 +52,7 @@ async def list_prices(
             base = base.where(Provider.slug == provider_ref)
             count_base = count_base.where(Provider.slug == provider_ref)
 
-    region_ref = _parse_id_or_slug(region)
+    region_ref = parse_id_or_slug(region)
     if region_ref is not None:
         if isinstance(region_ref, int):
             base = base.where(Region.id == region_ref)

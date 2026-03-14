@@ -115,7 +115,10 @@ def _price_per_hour_eur(price_hourly: float | None) -> float | None:
 def _infer_family(commercial_type: str) -> str:
     """Infer instance family from commercial type name."""
     type_lower = commercial_type.lower()
-    if type_lower.startswith("dev") or type_lower.startswith("stardust"):
+    # GPU check must come before "gp" (general-purpose) since "gpu" starts with "gp"
+    if "gpu" in type_lower or type_lower.startswith("h100") or type_lower.startswith("l40"):
+        return "gpu"
+    elif type_lower.startswith("dev") or type_lower.startswith("stardust"):
         return "development"
     elif type_lower.startswith("gp"):
         return "general-purpose"
@@ -123,8 +126,6 @@ def _infer_family(commercial_type: str) -> str:
         return "performance"
     elif type_lower.startswith("baremetal"):
         return "bare-metal"
-    elif "gpu" in type_lower or type_lower.startswith("h100") or type_lower.startswith("l40"):
-        return "gpu"
     elif type_lower.startswith("render"):
         return "render"
     else:
@@ -259,6 +260,22 @@ async def ingest(
                 # Infer family from commercial type
                 family = _infer_family(commercial_type)
 
+                # GPU: Scaleway GPU instances (H100, L40, etc.) have gpu != 0 in the API
+                gpu_count: int | None = None
+                gpu_model: str | None = None
+                type_lower = commercial_type.lower()
+                if "h100" in type_lower:
+                    gpu_count = 1
+                    gpu_model = "nvidia-h100"
+                elif "l40" in type_lower:
+                    gpu_count = 1
+                    gpu_model = "nvidia-l40s"
+                elif "a100" in type_lower:
+                    gpu_count = 1
+                    gpu_model = "nvidia-a100"
+                elif "gpu" in type_lower or family == "gpu":
+                    gpu_count = 1
+
                 # Ensure instance type
                 it = await ensure_instance_type(
                     db,
@@ -268,6 +285,8 @@ async def ingest(
                     ram_gb=ram_gb,
                     family=family,
                     arch=arch,
+                    gpu_count=gpu_count,
+                    gpu_model=gpu_model,
                 )
                 await db.flush()
                 instance_types_seen.add(commercial_type)

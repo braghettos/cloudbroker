@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.constants import PROVIDERS_PUBLISH_CARBON
 from app.models import (
     EgressRate,
     InstanceType,
@@ -25,6 +26,7 @@ from app.schemas.recommendations import (
     RecommendationItem,
     RecommendationRequest,
 )
+from app.services.sustainability_service import get_current_sustainability
 
 
 # Small score penalty when only USD price is available (no EUR)
@@ -197,6 +199,75 @@ def _compute_cross_az_cost_eur_per_hour(
     return estimated_gb_per_hour * rate
 
 
+def _compute_sustainability_score(
+    carbon_intensity: float | None, renewable_pct: float | None, candidates: list[_Candidate]
+) -> float | None:
+    """Compute sustainability score in [0, 1] (higher = greener). Returns None if no data.
+
+    Both sub-scores use consistent relative normalization against the candidate set:
+
+    carbon_score:
+        - Relative to the worst (max) carbon intensity in the candidate set.
+        - If all candidates share the same intensity, score = 0.5 (neutral).
+        - Range: 0 (dirtiest) → 1 (cleanest).
+
+    renewable_score:
+        - Relative to the best (max) renewable % in the candidate set.
+        - If all candidates have the same renewable share, score = 0.5.
+        - Range: 0 (no renewables) → 1 (best in set).
+
+    Final score: weighted average (60% carbon / 40% renewable).
+    Carbon intensity is the primary signal; renewable % is supplementary.
+    """
+    if carbon_intensity is None and renewable_pct is None:
+        return None
+
+    weight_carbon = 0.6
+    weight_renew = 0.4
+
+    # Carbon score: relative normalization (lower intensity = better)
+    carbon_score = 0.5  # neutral default when only one data point
+    if carbon_intensity is not None:
+        carbons = [c.carbon_intensity_g_co2_kwh for c in candidates if c.carbon_intensity_g_co2_kwh is not None]
+        if len(carbons) >= 2:
+            max_c = max(carbons)
+            min_c = min(carbons)
+            span = max_c - min_c
+            if span > 0:
+                # Linear: best (min) → 1.0, worst (max) → 0.0
+                carbon_score = (max_c - carbon_intensity) / span
+            else:
+                carbon_score = 0.5
+        elif carbons:
+            # Only one distinct value — give credit proportional to absolute intensity
+            # Anchor: 0 gCO2/kWh → 1.0, 800 gCO2/kWh → 0.0 (lignite ceiling)
+            carbon_score = max(0.0, min(1.0, 1.0 - carbon_intensity / 800.0))
+
+    # Renewable score: relative normalization (higher renewable share = better)
+    renew_score = 0.5  # neutral default
+    if renewable_pct is not None:
+        renewables = [c.renewable_energy_pct for c in candidates if c.renewable_energy_pct is not None]
+        if len(renewables) >= 2:
+            max_r = max(renewables)
+            min_r = min(renewables)
+            span = max_r - min_r
+            if span > 0:
+                renew_score = (renewable_pct - min_r) / span
+            else:
+                renew_score = 0.5
+        elif renewables:
+            # Only one value — use absolute (0% → 0, 100% → 1)
+            renew_score = renewable_pct
+
+    # Weighted combination
+    if carbon_intensity is not None and renewable_pct is not None:
+        return weight_carbon * carbon_score + weight_renew * renew_score
+    elif carbon_intensity is not None:
+        return carbon_score
+    else:
+        return renew_score
+
+
 def _compute_interruption_risk_score(
     vcpu: int,
     ram_gb: float,
@@ -250,9 +321,13 @@ class _Candidate:
     arch: str | None
     family: str | None  # For performance scoring
     gpu_count: int | None
-    price_per_hour: float  # EUR-normalized for comparison/scoring
-    price_currency: str  # Original currency (EUR or USD)
-    region_is_eu: bool
+    gpu_model: str | None = None
+    price_per_hour: float = 0.0  # EUR-normalized for comparison/scoring
+    price_currency: str = "EUR"  # Original currency (EUR or USD)
+    region_is_eu: bool = False
+    # Sustainability (ENTSO-E for EU, config, or DB fallback)
+    renewable_energy_pct: float | None = None
+    carbon_intensity_g_co2_kwh: float | None = None
 
 
 class RecommendationService:
@@ -299,7 +374,82 @@ class RecommendationService:
         if not candidates:
             return []
 
-        # TCO context: when any cost component is provided, compute full TCO for scoring
+        use_sustainability = (
+            req.min_renewable_pct is not None
+            or req.max_carbon_intensity is not None
+            or req.providers_publish_carbon_only
+        )
+        if use_sustainability:
+            candidates = await self._enrich_and_filter_sustainability(candidates, req)
+            if not candidates:
+                return []
+
+        candidate_tcos, use_tco, candidates = await self._compute_tco(candidates, req)
+        if use_tco and not candidates:
+            return []
+
+        weights = self._compute_scoring_weights(req)
+        scored = self._score_candidates(candidates, req, candidate_tcos, use_tco, use_sustainability, weights)
+        return self._build_response(scored, req.limit, weights)
+
+    @staticmethod
+    def _compute_scoring_weights(
+        req: RecommendationRequest,
+    ) -> dict:
+        """Determine scoring mode (multi-criteria vs legacy) and normalize weights."""
+        use_multi_criteria = (
+            req.cost_weight is not None or req.performance_weight is not None or req.reliability_weight is not None
+        )
+
+        if use_multi_criteria:
+            cost_w = req.cost_weight if req.cost_weight is not None else settings.recommendation_cost_weight
+            perf_w = (
+                req.performance_weight
+                if req.performance_weight is not None
+                else settings.recommendation_performance_weight
+            )
+            rel_w = (
+                req.reliability_weight
+                if req.reliability_weight is not None
+                else settings.recommendation_reliability_weight
+            )
+            total = cost_w + perf_w + rel_w
+            if total <= 0:
+                cost_w = perf_w = rel_w = 1.0 / 3.0
+                total = 1.0
+            return {
+                "multi": True,
+                "cost_weight": cost_w / total,
+                "perf_weight": perf_w / total,
+                "rel_weight": rel_w / total,
+                "price_weight": None,
+                "fit_weight": None,
+            }
+
+        price_weight = req.price_weight if req.price_weight is not None else settings.recommendation_price_weight
+        fit_weight = req.fit_weight if req.fit_weight is not None else settings.recommendation_fit_weight
+        total = price_weight + fit_weight
+        if total <= 0:
+            price_weight = fit_weight = 0.5
+            total = 1.0
+        return {
+            "multi": False,
+            "cost_weight": None,
+            "perf_weight": None,
+            "rel_weight": None,
+            "price_weight": price_weight / total,
+            "fit_weight": fit_weight / total,
+        }
+
+    async def _compute_tco(
+        self,
+        candidates: list[_Candidate],
+        req: RecommendationRequest,
+    ) -> tuple[dict[int, tuple[float, float, float, float, float, float]], bool, list[_Candidate]]:
+        """Compute TCO per candidate when cost-component context is provided.
+
+        Returns (tco_dict, use_tco_flag, filtered_candidates).
+        """
         use_egress_tco = (
             req.data_source_provider is not None
             and req.data_source_region is not None
@@ -311,6 +461,10 @@ class RecommendationService:
         use_os_tco = req.os_type is not None and req.os_type.lower() != "linux"
         use_cross_az_tco = req.estimated_cross_az_gb_per_hour is not None and req.estimated_cross_az_gb_per_hour > 0
         use_tco = use_egress_tco or use_storage_tco or use_public_ip_tco or use_os_tco or use_cross_az_tco
+
+        candidate_tcos: dict[int, tuple[float, float, float, float, float, float]] = {}
+        if not use_tco:
+            return candidate_tcos, False, candidates
 
         storage_type = (req.storage_type or "ssd").lower().strip()
         min_storage_gb = req.min_storage_gb or 0.0
@@ -332,134 +486,59 @@ class RecommendationService:
         if use_os_tco:
             os_license_rates = await self._fetch_os_license_rates()
 
-        # Compute TCO per candidate when enabled
-        # (tco, egress_cost, storage_cost, public_ip_cost, os_license_cost, cross_az_cost)
-        candidate_tcos: dict[int, tuple[float, float, float, float, float, float]] = {}
-        if use_tco:
+        for i, c in enumerate(candidates):
+            er = egress_rates.get(c.provider_slug)
+            egress_cost = (
+                _compute_egress_cost_eur_per_hour(
+                    c.provider_slug, c.region_slug,
+                    req.data_source_provider or "", req.data_source_region or "",
+                    req.estimated_egress_gb_per_hour or 0.0, er,
+                )
+                if use_egress_tco else 0.0
+            )
+            storage_cost = (
+                _compute_storage_cost_eur_per_hour(min_storage_gb, storage_type, c.provider_slug, c.region_slug, storage_rates)
+                if use_storage_tco else 0.0
+            )
+            public_ip_cost = (
+                _compute_public_ip_cost_eur_per_hour(use_public_ip_tco, c.provider_slug, public_ip_rates)
+                if use_public_ip_tco else 0.0
+            )
+            os_license_cost = (
+                _compute_os_license_cost_eur_per_hour(c.vcpu, os_type, c.provider_slug, os_license_rates)
+                if use_os_tco else 0.0
+            )
+            cross_az_cost = (
+                _compute_cross_az_cost_eur_per_hour(req.estimated_cross_az_gb_per_hour or 0.0, c.provider_slug, er)
+                if use_cross_az_tco else 0.0
+            )
+            tco = c.price_per_hour + egress_cost + storage_cost + public_ip_cost + os_license_cost + cross_az_cost
+            candidate_tcos[i] = (tco, egress_cost, storage_cost, public_ip_cost, os_license_cost, cross_az_cost)
+
+        if req.max_tco_eur_per_hour is not None and req.max_tco_eur_per_hour > 0:
+            kept: list[tuple[int, _Candidate]] = []
+            new_tcos: dict[int, tuple[float, float, float, float, float, float]] = {}
             for i, c in enumerate(candidates):
-                er = egress_rates.get(c.provider_slug)
-                egress_cost = (
-                    _compute_egress_cost_eur_per_hour(
-                        c.provider_slug,
-                        c.region_slug,
-                        req.data_source_provider or "",
-                        req.data_source_region or "",
-                        req.estimated_egress_gb_per_hour or 0.0,
-                        er,
-                    )
-                    if use_egress_tco
-                    else 0.0
-                )
-                storage_cost = (
-                    _compute_storage_cost_eur_per_hour(
-                        min_storage_gb,
-                        storage_type,
-                        c.provider_slug,
-                        c.region_slug,
-                        storage_rates,
-                    )
-                    if use_storage_tco
-                    else 0.0
-                )
-                public_ip_cost = (
-                    _compute_public_ip_cost_eur_per_hour(
-                        use_public_ip_tco,
-                        c.provider_slug,
-                        public_ip_rates,
-                    )
-                    if use_public_ip_tco
-                    else 0.0
-                )
-                os_license_cost = (
-                    _compute_os_license_cost_eur_per_hour(
-                        c.vcpu,
-                        os_type,
-                        c.provider_slug,
-                        os_license_rates,
-                    )
-                    if use_os_tco
-                    else 0.0
-                )
-                cross_az_cost = (
-                    _compute_cross_az_cost_eur_per_hour(
-                        req.estimated_cross_az_gb_per_hour or 0.0,
-                        c.provider_slug,
-                        er,
-                    )
-                    if use_cross_az_tco
-                    else 0.0
-                )
-                tco = c.price_per_hour + egress_cost + storage_cost + public_ip_cost + os_license_cost + cross_az_cost
-                candidate_tcos[i] = (
-                    tco,
-                    egress_cost,
-                    storage_cost,
-                    public_ip_cost,
-                    os_license_cost,
-                    cross_az_cost,
-                )
+                tco, *costs = candidate_tcos[i]
+                if tco <= req.max_tco_eur_per_hour:
+                    new_idx = len(kept)
+                    kept.append((i, c))
+                    new_tcos[new_idx] = (tco, *costs)
+            candidates = [c for _, c in kept]
+            candidate_tcos = new_tcos
 
-            # Filter by max TCO when set
-            if req.max_tco_eur_per_hour is not None and req.max_tco_eur_per_hour > 0:
-                kept: list[tuple[int, _Candidate]] = []
-                new_tcos: dict[int, tuple[float, float, float, float, float, float]] = {}
-                for i, c in enumerate(candidates):
-                    tco, *costs = candidate_tcos[i]
-                    if tco <= req.max_tco_eur_per_hour:
-                        new_idx = len(kept)
-                        kept.append((i, c))
-                        new_tcos[new_idx] = (tco, *costs)
-                candidates = [c for _, c in kept]
-                candidate_tcos = new_tcos
-                if not candidates:
-                    return []
+        return candidate_tcos, True, candidates
 
-        # Determine if using multi-criteria (cost/performance/reliability) or legacy (price/fit) scoring
-        use_multi_criteria = (
-            req.cost_weight is not None or req.performance_weight is not None or req.reliability_weight is not None
-        )
-
-        if use_multi_criteria:
-            # Multi-criteria scoring: cost, performance, reliability
-            cost_w = req.cost_weight if req.cost_weight is not None else settings.recommendation_cost_weight
-            perf_w = (
-                req.performance_weight
-                if req.performance_weight is not None
-                else settings.recommendation_performance_weight
-            )
-            rel_w = (
-                req.reliability_weight
-                if req.reliability_weight is not None
-                else settings.recommendation_reliability_weight
-            )
-            total = cost_w + perf_w + rel_w
-            if total <= 0:
-                cost_w = perf_w = rel_w = 1.0 / 3.0
-                total = 1.0
-            cost_weight_norm = cost_w / total
-            perf_weight_norm = perf_w / total
-            rel_weight_norm = rel_w / total
-
-            # Legacy weights set to None for explain
-            price_weight_norm = None
-            fit_weight_norm = None
-        else:
-            # Legacy scoring: price + fit
-            price_weight = req.price_weight if req.price_weight is not None else settings.recommendation_price_weight
-            fit_weight = req.fit_weight if req.fit_weight is not None else settings.recommendation_fit_weight
-            total = price_weight + fit_weight
-            if total <= 0:
-                price_weight = fit_weight = 0.5
-                total = 1.0
-            price_weight_norm = price_weight / total
-            fit_weight_norm = fit_weight / total
-
-            # Multi-criteria weights set to None for explain
-            cost_weight_norm = None
-            perf_weight_norm = None
-            rel_weight_norm = None
-
-        # Use TCO for cost scoring when placement context provided, else instance price
+    def _score_candidates(
+        self,
+        candidates: list[_Candidate],
+        req: RecommendationRequest,
+        candidate_tcos: dict[int, tuple[float, float, float, float, float, float]],
+        use_tco: bool,
+        use_sustainability: bool,
+        weights: dict,
+    ) -> list[tuple]:
+        """Score and sort candidates. Returns list of tuples for response building."""
         if use_tco:
             min_price = min(candidate_tcos[i][0] for i in range(len(candidates)))
             max_price = max(candidate_tcos[i][0] for i in range(len(candidates)))
@@ -468,37 +547,21 @@ class RecommendationService:
             max_price = max(c.price_per_hour for c in candidates)
         price_range = max_price - min_price if max_price > min_price else 1.0
 
-        # Build sets for fast lookup
         preferred_set = set(req.preferred_providers) if req.preferred_providers else set()
         preference_multiplier = settings.recommendation_preference_multiplier
 
-        # Determine if this is a spot request
         try:
             purchase_model = PurchaseModel(req.purchase_model.lower())
             is_spot = purchase_model == PurchaseModel.SPOT
         except ValueError:
             is_spot = False
 
-        scored: list[
-            tuple[
-                float,
-                float,
-                float,
-                float | None,
-                float | None,
-                float | None,
-                float | None,
-                _Candidate,
-                float | None,
-                float | None,
-            ]
-        ] = []
+        scored: list[tuple] = []
         for i, c in enumerate(candidates):
             resource_fit = min(1.0, req.min_vcpu / c.vcpu) * min(1.0, req.min_ram_gb / c.ram_gb)
             cost_for_score = candidate_tcos[i][0] if use_tco else c.price_per_hour
             normalized_price = (max_price - cost_for_score) / price_range if price_range else 1.0
 
-            # Compute spot risk scores if this is a spot request
             spot_avail_score = None
             interrupt_risk_score = None
             if is_spot:
@@ -509,63 +572,63 @@ class RecommendationService:
                     c.vcpu, c.ram_gb, c.price_per_hour, c.provider_type, candidates
                 )
 
-            if use_multi_criteria:
-                # Multi-criteria: cost (inverse of price), performance, reliability
-                cost_score = normalized_price  # Higher = cheaper = better
+            if weights["multi"]:
+                cost_score = normalized_price
                 perf_score = _compute_performance_score(c.vcpu, c.ram_gb, c.family, candidates)
                 rel_score = _compute_reliability_score(c.provider_type)
                 score = (
-                    (cost_weight_norm * cost_score) + (perf_weight_norm * perf_score) + (rel_weight_norm * rel_score)
+                    (weights["cost_weight"] * cost_score)
+                    + (weights["perf_weight"] * perf_score)
+                    + (weights["rel_weight"] * rel_score)
                 )
                 perf_score_out = perf_score
                 rel_score_out = rel_score
             else:
-                # Legacy: price + fit
-                score = (price_weight_norm * normalized_price) + (fit_weight_norm * resource_fit)
+                score = (weights["price_weight"] * normalized_price) + (weights["fit_weight"] * resource_fit)
                 perf_score_out = None
                 rel_score_out = None
 
             if c.price_currency != "EUR":
                 score *= USD_ONLY_PENALTY
 
-            # Apply spot risk penalty: reduce score for high interruption risk
             if is_spot and interrupt_risk_score is not None:
-                # Penalize high-risk instances: multiply by (1 - risk * 0.3)
-                # This means a risk of 1.0 reduces score by 30%, risk of 0.5 reduces by 15%
                 score *= 1.0 - interrupt_risk_score * 0.3
 
-            # Apply preference multiplier for preferred providers
             if c.provider_slug in preferred_set:
                 score *= preference_multiplier
-            tco_data = candidate_tcos[i] if use_tco else None
-            tco_val = tco_data[0] if tco_data else None
-            egress_val = tco_data[1] if tco_data else None
-            storage_val = tco_data[2] if tco_data else None
-            public_ip_val = tco_data[3] if tco_data else None
-            os_license_val = tco_data[4] if tco_data else None
-            cross_az_val = tco_data[5] if tco_data else None
-            scored.append(
-                (
-                    score,
-                    resource_fit,
-                    normalized_price,
-                    perf_score_out,
-                    rel_score_out,
-                    spot_avail_score,
-                    interrupt_risk_score,
-                    c,
-                    tco_val,
-                    egress_val,
-                    storage_val,
-                    public_ip_val,
-                    os_license_val,
-                    cross_az_val,
-                )
+
+            sust_score = _compute_sustainability_score(
+                c.carbon_intensity_g_co2_kwh, c.renewable_energy_pct, candidates
             )
+            if sust_score is not None and use_sustainability:
+                score *= 1.0 + settings.sustainability_boost_max * sust_score
+
+            tco_data = candidate_tcos[i] if use_tco else None
+            scored.append((
+                score, resource_fit, normalized_price,
+                perf_score_out, rel_score_out,
+                spot_avail_score, interrupt_risk_score,
+                c,
+                tco_data[0] if tco_data else None,
+                tco_data[1] if tco_data else None,
+                tco_data[2] if tco_data else None,
+                tco_data[3] if tco_data else None,
+                tco_data[4] if tco_data else None,
+                tco_data[5] if tco_data else None,
+                sust_score,
+            ))
 
         scored.sort(key=lambda x: -x[0])
-        top = scored[: req.limit]
+        return scored
 
+    @staticmethod
+    def _build_response(
+        scored: list[tuple],
+        limit: int,
+        weights: dict,
+    ) -> list[RecommendationItem]:
+        """Convert scored tuples into RecommendationItem responses."""
+        top = scored[:limit]
         return [
             RecommendationItem(
                 instance_type_id=c.instance_type_id,
@@ -580,13 +643,13 @@ class RecommendationService:
                 explain=RecommendationExplain(
                     resource_fit=resource_fit,
                     normalized_price=normalized_price,
-                    price_weight=price_weight_norm or 0.0,
-                    fit_weight=fit_weight_norm or 0.0,
+                    price_weight=weights["price_weight"] or 0.0,
+                    fit_weight=weights["fit_weight"] or 0.0,
                     performance_score=perf_score,
                     reliability_score=rel_score,
-                    cost_weight=cost_weight_norm,
-                    performance_weight=perf_weight_norm,
-                    reliability_weight=rel_weight_norm,
+                    cost_weight=weights["cost_weight"],
+                    performance_weight=weights["perf_weight"],
+                    reliability_weight=weights["rel_weight"],
                     spot_availability_score=spot_avail_score,
                     interruption_risk_score=interrupt_risk_score,
                     price_eur_per_hour=c.price_per_hour,
@@ -597,9 +660,10 @@ class RecommendationService:
                     public_ip_cost_eur_per_hour=public_ip_val,
                     os_license_cost_eur_per_hour=os_license_val,
                     cross_az_cost_eur_per_hour=cross_az_val,
+                    sustainability_score=sust_score,
                 ),
             )
-            for score, resource_fit, normalized_price, perf_score, rel_score, spot_avail_score, interrupt_risk_score, c, tco_val, egress_val, storage_val, public_ip_val, os_license_val, cross_az_val in top
+            for score, resource_fit, normalized_price, perf_score, rel_score, spot_avail_score, interrupt_risk_score, c, tco_val, egress_val, storage_val, public_ip_val, os_license_val, cross_az_val, sust_score in top
         ]
 
     async def _fetch_candidates(self, req: RecommendationRequest) -> list[_Candidate]:
@@ -643,6 +707,8 @@ class RecommendationService:
                 InstanceType.arch,
                 InstanceType.family,
                 InstanceType.gpu_count,
+                InstanceType.gpu_model,
+                InstanceType.is_available,
                 effective_price.label("price_per_hour"),
                 Price.currency.label("price_currency"),
                 Region.is_eu.label("region_is_eu"),
@@ -676,11 +742,21 @@ class RecommendationService:
         if req.excluded_providers:
             stmt = stmt.where(~Provider.slug.in_(req.excluded_providers))
 
+        # Restrict to providers that publish carbon emissions
+        if req.providers_publish_carbon_only:
+            stmt = stmt.where(Provider.slug.in_(PROVIDERS_PUBLISH_CARBON))
+
         # Filter excluded instance types (e.g. after provisioning failure)
         if req.excluded_instance_types:
             stmt = stmt.where(~InstanceType.name.in_(req.excluded_instance_types))
 
-        # Azure ARM-only sizes (pls, ps_v5, plds) may be mislabeled as x86_64 in the DB.
+        # Filter excluded instance type prefixes (e.g. 'Standard_B' for all Azure B-series)
+        if req.excluded_instance_type_prefixes:
+            for prefix in req.excluded_instance_type_prefixes:
+                pattern = f"{prefix}%"
+                stmt = stmt.where(~InstanceType.name.ilike(pattern))
+
+        # Azure ARM-only sizes (pls, ps_v5, plds, pts) may be mislabeled as x86_64 in the DB.
         # Exclude them when requesting x86_64 to avoid "Arm64 VM size with x64 image" failures.
         if arch_val == "x86_64":
             stmt = stmt.where(
@@ -690,6 +766,7 @@ class RecommendationService:
                         ~InstanceType.name.ilike("%pls%"),
                         ~InstanceType.name.ilike("%ps_v5%"),
                         ~InstanceType.name.ilike("%plds%"),
+                        ~InstanceType.name.ilike("%pts%"),
                     ),
                 )
             )
@@ -701,10 +778,61 @@ class RecommendationService:
                 InstanceType.gpu_count >= req.min_gpu_count,
             )
 
-        # Filter by gpu_type (substring match on instance type name)
+        # Filter by gpu_type (substring match on instance type name OR gpu_model)
         if req.gpu_type:
             gpu_pattern = f"%{req.gpu_type}%"
-            stmt = stmt.where(InstanceType.name.ilike(gpu_pattern))
+            stmt = stmt.where(
+                or_(
+                    InstanceType.name.ilike(gpu_pattern),
+                    InstanceType.gpu_model.ilike(gpu_pattern),
+                )
+            )
+
+        # Filter by minimum local disk
+        if req.min_disk_gb is not None and req.min_disk_gb > 0:
+            stmt = stmt.where(
+                InstanceType.disk_gb.isnot(None),
+                InstanceType.disk_gb >= req.min_disk_gb,
+            )
+
+        # Filter to current-generation only
+        if req.current_gen_only:
+            stmt = stmt.where(
+                or_(
+                    InstanceType.is_current_gen.is_(None),  # unknown gen → include
+                    InstanceType.is_current_gen.is_(True),
+                )
+            )
+
+        # Filter by minimum included data transfer (TB/month)
+        if req.min_transfer_tb is not None and req.min_transfer_tb > 0:
+            stmt = stmt.where(
+                InstanceType.transfer_tb.isnot(None),
+                InstanceType.transfer_tb >= req.min_transfer_tb,
+            )
+
+        # Filter by CPU type (shared vs dedicated)
+        if req.cpu_type:
+            stmt = stmt.where(
+                or_(
+                    InstanceType.cpu_type.is_(None),  # unknown → include
+                    InstanceType.cpu_type.ilike(f"%{req.cpu_type}%"),
+                )
+            )
+
+        # Filter by network performance tier (substring match)
+        if req.network_performance:
+            stmt = stmt.where(
+                or_(
+                    InstanceType.network_performance.is_(None),  # unknown → include
+                    InstanceType.network_performance.ilike(f"%{req.network_performance}%"),
+                )
+            )
+
+        # Exclude unavailable instance types
+        stmt = stmt.where(
+            or_(InstanceType.is_available.is_(None), InstanceType.is_available.is_(True))
+        )
 
         result = await self._db.execute(stmt)
         rows = result.all()
@@ -722,9 +850,77 @@ class RecommendationService:
                 arch=r.arch,
                 family=r.family,
                 gpu_count=r.gpu_count,
+                gpu_model=r.gpu_model,
                 price_per_hour=r.price_per_hour,
                 price_currency=r.price_currency or "EUR",
                 region_is_eu=r.region_is_eu,
             )
             for r in rows
         ]
+
+    async def _enrich_and_filter_sustainability(
+        self, candidates: list[_Candidate], req: RecommendationRequest
+    ) -> list[_Candidate]:
+        """Fetch sustainability (ENTSO-E for EU, config), fallback to DB."""
+        import asyncio
+
+        seen = set()
+        region_sustainability: dict[tuple[str, str], tuple[float | None, float | None]] = {}
+
+        async def fetch_one(provider_slug: str, region_slug: str) -> None:
+            key = (provider_slug, region_slug)
+            if key in seen:
+                return
+            seen.add(key)
+            data = await get_current_sustainability(provider_slug, region_slug)
+            if data:
+                region_sustainability[key] = (
+                    data.renewable_energy_pct,
+                    data.carbon_intensity_g_co2_kwh,
+                )
+            else:
+                region_sustainability[key] = (None, None)
+
+        await asyncio.gather(
+            *[fetch_one(c.provider_slug, c.region_slug) for c in candidates],
+            return_exceptions=True,
+        )
+
+        # DB fallback for regions where real-time returned None (batch/static from Google CSV, Ember, config)
+        missing = [k for k, v in region_sustainability.items() if v == (None, None)]
+        if missing:
+            stmt = (
+                select(
+                    Provider.slug.label("provider_slug"),
+                    Region.slug.label("region_slug"),
+                    Region.renewable_energy_pct,
+                    Region.carbon_intensity_g_co2_kwh,
+                )
+                .join(Region, Region.provider_id == Provider.id)
+                .where(tuple_(Provider.slug, Region.slug).in_(missing))
+            )
+            result = await self._db.execute(stmt)
+            for row in result.all():
+                key = (row.provider_slug, row.region_slug)
+                if (
+                    row.renewable_energy_pct is not None or row.carbon_intensity_g_co2_kwh is not None
+                ) and key in region_sustainability:
+                    region_sustainability[key] = (row.renewable_energy_pct, row.carbon_intensity_g_co2_kwh)
+
+        enriched: list[_Candidate] = []
+        for c in candidates:
+            key = (c.provider_slug, c.region_slug)
+            renewable, carbon = region_sustainability.get(key, (None, None))
+            c.renewable_energy_pct = renewable
+            c.carbon_intensity_g_co2_kwh = carbon
+
+            if req.min_renewable_pct is not None and req.min_renewable_pct > 0:
+                if renewable is None or renewable < req.min_renewable_pct:
+                    continue
+            if req.max_carbon_intensity is not None:
+                if carbon is not None and carbon > req.max_carbon_intensity:
+                    continue
+
+            enriched.append(c)
+
+        return enriched

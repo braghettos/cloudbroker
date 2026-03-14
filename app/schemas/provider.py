@@ -35,3 +35,4 @@ class ProviderResponse(ProviderBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    publishes_carbon_emissions: bool = False

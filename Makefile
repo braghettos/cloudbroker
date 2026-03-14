@@ -10,7 +10,7 @@ DB_PASSWORD ?= cloudbroker-dev
 KIND_CLUSTER ?= cloudburst
 KIND_NODE_IMAGE ?= kindest/node:v1.34.3
 
-.PHONY: help install dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-verify ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-seeweb ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations check-scorecard-recommendations verify-gcp verify-hetzner verify-all verify-azure verify-otc verify-ovh verify-config docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image seed-dr-hetzner-first
+.PHONY: help install lock dev run test test-exhaustive test-cov test-e2e lint format up down migrate migrate-down migrate-revision ingest-gcp ingest-gcp-verify ingest-gcp-machines ingest-hetzner ingest-aws ingest-aws-quick ingest-azure ingest-azure-quick ingest-azure-egress ingest-azure-spot ingest-azure-spot-quick ingest-digitalocean ingest-scaleway ingest-ovh ingest-seeweb ingest-aruba ingest-upcloud ingest-exoscale ingest-contabo ingest-gcore ingest-cherry-servers ingest-clouding ingest-ibm-cloud ingest-sustainability ingest-all ingest-egress ingest-storage ingest-public-ip ingest-os-license ingest-all-costs test-recommendations check-scorecard-recommendations verify-gcp verify-hetzner verify-all verify-azure verify-ovh verify-config docker-build clean deploy deploy-cloudbroker install-prereqs deploy-cluster deploy-ingest build-kind-image seed-dr-hetzner-first
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) }' $(MAKEFILE_LIST)
@@ -19,6 +19,10 @@ help: ## Show this help
 
 install: ## Install all dependencies (dev + ingest extras)
 	$(PYTHON) -m pip install -e ".[dev,ingest]"
+
+lock: ## Generate pinned requirements.lock from pyproject.toml
+	$(PYTHON) -m piptools compile --resolver=backtracking -o requirements.lock pyproject.toml
+	$(PYTHON) -m piptools compile --resolver=backtracking --extra dev --extra ingest -o requirements-dev.lock pyproject.toml
 
 ##@ Development
 
@@ -55,19 +59,16 @@ verify-gcp: ## Verify GCP ingested prices match Billing Catalog API (run after i
 verify-hetzner: ## Verify Hetzner ingested prices match Cloud API (run after ingest, requires HETZNER_API_TOKEN)
 	$(PYTHON) scripts/verify_hetzner_ingestion.py
 
-verify-all: ## Verify ingested prices for all providers (GCP, Hetzner, Azure, OTC, OVH, DO, AWS, Scaleway, UpCloud, Seeweb, config-based)
+verify-all: ## Verify ingested prices for all providers (GCP, Hetzner, Azure, OVH, DO, AWS, Scaleway, UpCloud, Seeweb, config-based)
 	$(PYTHON) scripts/verify_all_ingestion.py
 
 verify-azure: ## Verify Azure ingested prices (public API, no auth)
 	$(PYTHON) scripts/verify_all_ingestion.py --provider azure
 
-verify-otc: ## Verify Open Telekom Cloud ingested prices (public API, no auth)
-	$(PYTHON) scripts/verify_all_ingestion.py --provider otc
-
 verify-ovh: ## Verify OVH ingested prices (public catalog, no auth)
 	$(PYTHON) scripts/verify_all_ingestion.py --provider ovh
 
-verify-config: ## Verify config-based providers (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso)
+verify-config: ## Verify config-based providers (Aruba, Exoscale, Contabo, Gcore, Cherry, Clouding)
 	$(PYTHON) scripts/verify_all_ingestion.py --provider config
 
 test-e2e: ## Run e2e tests (requires: make up, make migrate, ingest, ingest --egress)
@@ -139,32 +140,32 @@ ingest-scaleway: ## Ingest Scaleway (requires SCW_ACCESS_KEY + SCW_SECRET_KEY)
 ingest-ovh: ## Ingest OVH (requires OVH keys)
 	$(PYTHON) -m apps.ingestor ingest --provider ovh
 
-ingest-aruba: ## Ingest Aruba Cloud (config-based, no API keys)
+ingest-aruba: ## Ingest Aruba Cloud (requires ARUBA_USERNAME + ARUBA_PASSWORD)
 	$(PYTHON) -m apps.ingestor ingest --provider aruba
 
 ingest-upcloud: ## Ingest UpCloud (requires UPCLOUD_USERNAME + UPCLOUD_PASSWORD)
 	$(PYTHON) -m apps.ingestor ingest --provider upcloud
 
-ingest-open-telekom-cloud: ## Ingest Open Telekom Cloud (public pricing API, no auth)
-	$(PYTHON) -m apps.ingestor ingest --provider open_telekom_cloud
-
-ingest-exoscale: ## Ingest Exoscale (config-based, no API keys)
+ingest-exoscale: ## Ingest Exoscale (requires EXOSCALE_API_KEY + EXOSCALE_API_SECRET)
 	$(PYTHON) -m apps.ingestor ingest --provider exoscale
 
-ingest-ionos: ## Ingest IONOS Cloud (config-based, no API keys)
-	$(PYTHON) -m apps.ingestor ingest --provider ionos
+ingest-contabo: ## Ingest Contabo (config-based, no auth required)
+	$(PYTHON) -m apps.ingestor ingest --provider contabo
 
-ingest-gridscale: ## Ingest gridscale (config-based, no API keys)
-	$(PYTHON) -m apps.ingestor ingest --provider gridscale
+ingest-gcore: ## Ingest Gcore (config-based, no auth required)
+	$(PYTHON) -m apps.ingestor ingest --provider gcore
 
-ingest-stackit: ## Ingest STACKIT (config-based, no API keys)
-	$(PYTHON) -m apps.ingestor ingest --provider stackit
+ingest-cherry-servers: ## Ingest Cherry Servers (config-based, no auth required)
+	$(PYTHON) -m apps.ingestor ingest --provider cherry_servers
 
-ingest-elastx: ## Ingest Elastx (config-based, no API keys)
-	$(PYTHON) -m apps.ingestor ingest --provider elastx
+ingest-clouding: ## Ingest Clouding.io (config-based, no auth required)
+	$(PYTHON) -m apps.ingestor ingest --provider clouding
 
-ingest-cyso-cloud: ## Ingest Cyso Cloud (config-based, no API keys)
-	$(PYTHON) -m apps.ingestor ingest --provider cyso_cloud
+ingest-ibm-cloud: ## Ingest IBM Cloud VPC (API-based; requires IBMCLOUD_API_KEY)
+	$(PYTHON) -m apps.ingestor ingest --provider ibm_cloud
+
+ingest-sustainability: ## Ingest sustainability data (GCP CSV + Ember static fallback for all regions)
+	$(PYTHON) -m apps.ingestor ingest --provider sustainability
 
 ingest-seeweb: ## Ingest Seeweb (requires SEEWEB_API_TOKEN or SEEWEB_USERNAME + SEEWEB_PASSWORD)
 	$(PYTHON) -m apps.ingestor ingest --provider seeweb

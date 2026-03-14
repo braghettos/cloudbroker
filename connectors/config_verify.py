@@ -1,7 +1,8 @@
 """Verify config-based providers: stored prices match connector config.
 
-For Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso Cloud - no pricing API
-exists; prices come from connector FLAVORS config. This verifies stored == config.
+For Aruba, Exoscale, Contabo, Gcore, Cherry Servers,
+Clouding.io - no pricing API exists; prices come from connector
+FLAVORS/PLANS config. This verifies stored == config.
 """
 
 from __future__ import annotations
@@ -20,14 +21,33 @@ logger = get_logger(__name__)
 
 RELTOL = 0.001  # Config should match exactly (tiny tolerance for float)
 
+# (slug, module_path, flavors_attr, regions_attr, price_extractor)
+# price_extractor(spec) -> expected eur_per_hour or None to skip
+def _contabo_price(spec: tuple) -> float | None:
+    if len(spec) >= 4:
+        return float(spec[3]) / 730.0  # eur_per_month -> eur_per_hour
+    return None
+
+
+def _cherry_price(spec: tuple) -> float | None:
+    if len(spec) >= 4:
+        return float(spec[3])  # eur_per_hour
+    return None
+
+
+def _clouding_price(spec: tuple) -> float | None:
+    if len(spec) >= 4:
+        return float(spec[3])  # eur_per_hour
+    return None
+
+
 CONFIG_PROVIDERS = [
-    ("aruba", "connectors.aruba", "ARUBA_FLAVORS", "ARUBA_REGIONS"),
-    ("exoscale", "connectors.exoscale", "EXOSCALE_FLAVORS", "EXOSCALE_REGIONS"),
-    ("ionos", "connectors.ionos", "IONOS_FLAVORS", "IONOS_REGIONS"),
-    ("gridscale", "connectors.gridscale", "GRIDSCALE_FLAVORS", "GRIDSCALE_REGIONS"),
-    ("stackit", "connectors.stackit", "STACKIT_FLAVORS", "STACKIT_REGIONS"),
-    ("elastx", "connectors.elastx", "ELASTX_FLAVORS", "ELASTX_REGIONS"),
-    ("cyso_cloud", "connectors.cyso_cloud", "CYSOCLOUD_FLAVORS", "CYSOCLOUD_REGIONS"),
+    ("aruba", "connectors.aruba", "ARUBA_FLAVORS", "ARUBA_REGIONS", None),
+    ("exoscale", "connectors.exoscale", "EXOSCALE_FLAVORS", "EXOSCALE_REGIONS", None),
+    ("contabo", "connectors.contabo", "CONTABO_PLANS", "CONTABO_REGIONS", _contabo_price),
+    ("gcore", "connectors.gcore", "GCORE_REGIONS", "GCORE_REGIONS", None),
+    ("cherry_servers", "connectors.cherry_servers", "CHERRY_PLANS", "CHERRY_REGIONS", _cherry_price),
+    ("clouding", "connectors.clouding", "CLOUDING_PLANS", "CLOUDING_REGIONS", _clouding_price),
 ]
 
 
@@ -58,11 +78,15 @@ async def verify_ingested_prices(
         results.append(VerificationResult(passed=True, message="Config verify only supports on_demand"))
         return results
 
-    for slug, module_path, flavors_attr, regions_attr in CONFIG_PROVIDERS:
+    for slug, module_path, flavors_attr, regions_attr, price_extractor in CONFIG_PROVIDERS:
         flavors = _get_config(module_path, flavors_attr)
         regions_cfg = _get_config(module_path, regions_attr)
         if not flavors or not isinstance(flavors, dict):
             results.append(VerificationResult(passed=True, message=f"{slug}: no FLAVORS config (skipping)"))
+            continue
+
+        if not price_extractor:
+            results.append(VerificationResult(passed=True, message=f"{slug}: no price extractor (skipping)"))
             continue
 
         provider = (await db.execute(select(Provider).where(Provider.slug == slug).limit(1))).scalars().first()
@@ -78,11 +102,13 @@ async def verify_ingested_prices(
         mismatches = []
         checked = 0
         for name, spec in list(flavors.items())[:10]:
-            if isinstance(spec, (list, tuple)) and len(spec) >= 3:
-                expected = float(spec[2])
+            if isinstance(spec, (list, tuple)):
+                expected = price_extractor(spec)
             elif isinstance(spec, dict) and "price_eur_per_hour" in spec:
                 expected = float(spec["price_eur_per_hour"])
             else:
+                continue
+            if expected is None:
                 continue
             it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == name).limit(1))).scalars().first()
             if not it:

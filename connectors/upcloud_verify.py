@@ -84,7 +84,9 @@ async def verify_ingested_prices(
     for plan in SAMPLE_PLANS:
         if plan not in price_by_plan:
             continue
-        expected = price_by_plan[plan]
+        # UpCloud API returns price in 0.01 EUR units; connector divides by 100 for eur_per_hour
+        raw = price_by_plan[plan]
+        expected = raw / 100.0
         it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == plan).limit(1))).scalars().first()
         if not it:
             results.append(VerificationResult(passed=False, message=f"UpCloud {plan}: not in DB", details={"expected": expected}))

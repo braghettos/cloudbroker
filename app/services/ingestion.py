@@ -19,6 +19,7 @@ async def ensure_provider(
     name: str,
     website: str | None = None,
     type: ProviderType = ProviderType.REGIONAL,
+    publishes_carbon_emissions: bool = False,
 ) -> Provider:
     """Get or create provider by slug (idempotent)."""
     stmt = select(Provider).where(Provider.slug == slug).limit(1)
@@ -29,8 +30,15 @@ async def ensure_provider(
         if website is not None:
             row.website = website
         row.type = type
+        row.publishes_carbon_emissions = publishes_carbon_emissions
         return row
-    p = Provider(slug=slug, name=name, website=website, type=type)
+    p = Provider(
+        slug=slug,
+        name=name,
+        website=website,
+        type=type,
+        publishes_carbon_emissions=publishes_carbon_emissions,
+    )
     db.add(p)
     await db.flush()
     return p
@@ -43,6 +51,9 @@ async def ensure_region(
     name: str,
     country: str | None = None,
     is_eu: bool = False,
+    renewable_energy_pct: float | None = None,
+    carbon_intensity_g_co2_kwh: float | None = None,
+    publishes_carbon_data: bool = False,
 ) -> Region:
     """Get or create region by (provider_id, slug) (idempotent)."""
     stmt = select(Region).where(Region.provider_id == provider_id).where(Region.slug == slug).limit(1)
@@ -53,8 +64,22 @@ async def ensure_region(
         if country is not None:
             row.country = country
         row.is_eu = is_eu
+        if renewable_energy_pct is not None:
+            row.renewable_energy_pct = renewable_energy_pct
+        if carbon_intensity_g_co2_kwh is not None:
+            row.carbon_intensity_g_co2_kwh = carbon_intensity_g_co2_kwh
+        row.publishes_carbon_data = publishes_carbon_data
         return row
-    r = Region(provider_id=provider_id, slug=slug, name=name, country=country, is_eu=is_eu)
+    r = Region(
+        provider_id=provider_id,
+        slug=slug,
+        name=name,
+        country=country,
+        is_eu=is_eu,
+        renewable_energy_pct=renewable_energy_pct,
+        carbon_intensity_g_co2_kwh=carbon_intensity_g_co2_kwh,
+        publishes_carbon_data=publishes_carbon_data,
+    )
     db.add(r)
     await db.flush()
     return r
@@ -70,6 +95,15 @@ async def ensure_instance_type(
     generation: str | None = None,
     arch: str | None = None,
     gpu_count: int | None = None,
+    gpu_model: str | None = None,
+    gpu_memory_gb: float | None = None,
+    disk_gb: float | None = None,
+    disk_type: str | None = None,
+    network_performance: str | None = None,
+    cpu_type: str | None = None,
+    is_current_gen: bool | None = None,
+    transfer_tb: float | None = None,
+    is_available: bool | None = None,
     metadata_json: str | None = None,
 ) -> InstanceType:
     """Get or create instance type by (provider_id, name) (idempotent)."""
@@ -87,6 +121,24 @@ async def ensure_instance_type(
             row.arch = arch
         if gpu_count is not None:
             row.gpu_count = gpu_count
+        if gpu_model is not None:
+            row.gpu_model = gpu_model
+        if gpu_memory_gb is not None:
+            row.gpu_memory_gb = gpu_memory_gb
+        if disk_gb is not None:
+            row.disk_gb = disk_gb
+        if disk_type is not None:
+            row.disk_type = disk_type
+        if network_performance is not None:
+            row.network_performance = network_performance
+        if cpu_type is not None:
+            row.cpu_type = cpu_type
+        if is_current_gen is not None:
+            row.is_current_gen = is_current_gen
+        if transfer_tb is not None:
+            row.transfer_tb = transfer_tb
+        if is_available is not None:
+            row.is_available = is_available
         if metadata_json is not None:
             row.metadata_json = metadata_json
         return row
@@ -99,6 +151,15 @@ async def ensure_instance_type(
         generation=generation,
         arch=arch,
         gpu_count=gpu_count,
+        gpu_model=gpu_model,
+        gpu_memory_gb=gpu_memory_gb,
+        disk_gb=disk_gb,
+        disk_type=disk_type,
+        network_performance=network_performance,
+        cpu_type=cpu_type,
+        is_current_gen=is_current_gen,
+        transfer_tb=transfer_tb,
+        is_available=is_available if is_available is not None else True,
         metadata_json=metadata_json,
     )
     db.add(it)
@@ -262,6 +323,8 @@ async def append_price(
     currency: str,
     price_per_hour: float,
     price_eur_per_hour: float | None = None,
+    source_currency: str | None = None,
+    effective_date: datetime.datetime | None = None,
     timestamp: datetime.datetime | None = None,
 ) -> Price | None:
     """Insert a price row if no duplicate for same (instance_type_id, region_id, purchase_model, hour). Append-only, idempotent per hour."""
@@ -286,8 +349,10 @@ async def append_price(
         region_id=region_id,
         purchase_model=purchase_model,
         currency=currency,
+        source_currency=source_currency,
         price_per_hour=price_per_hour,
         price_eur_per_hour=price_eur_per_hour,
+        effective_date=effective_date,
         timestamp=ts,
     )
     db.add(p)

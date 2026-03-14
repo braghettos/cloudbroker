@@ -46,43 +46,7 @@ upcloud:
   cross_region_eur_per_gb: 0.005
   cross_az_eur_per_gb: 0.005
 
-open_telekom_cloud:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
 exoscale:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
-ionos:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
-gridscale:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
-stackit:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
-elastx:
-  egress_eur_per_gb: 0.01
-  free_tier_gb_per_month: 0
-  cross_region_eur_per_gb: 0.01
-  cross_az_eur_per_gb: 0.01
-
-cyso_cloud:
   egress_eur_per_gb: 0.01
   free_tier_gb_per_month: 0
   cross_region_eur_per_gb: 0.01
@@ -94,3 +58,38 @@ seeweb:
   free_tier_gb_per_month: 0
   cross_region_eur_per_gb: 0.01
   cross_az_eur_per_gb: 0.01
+
+# contabo: https://contabo.com/en/pricing/ — unlimited traffic included in plans
+contabo:
+  egress_eur_per_gb: 0.0
+  free_tier_gb_per_month: 0  # unlimited included
+  cross_region_eur_per_gb: 0.0
+  cross_az_eur_per_gb: 0.0
+
+# gcore: https://gcore.com/pricing/cloud
+gcore:
+  egress_eur_per_gb: 0.005
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.005
+  cross_az_eur_per_gb: 0.005
+
+# cherry_servers: https://www.cherryservers.com/pricing
+cherry_servers:
+  egress_eur_per_gb: 0.01
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.01
+  cross_az_eur_per_gb: 0.01
+
+# clouding: https://clouding.io/en/ — 4TB/month included in all plans
+clouding:
+  egress_eur_per_gb: 0.0
+  free_tier_gb_per_month: 4096  # 4TB included per month per instance
+  cross_region_eur_per_gb: 0.0
+  cross_az_eur_per_gb: 0.0
+
+# ibm_cloud: https://cloud.ibm.com/docs/vpc — ~$0.087/GB internet egress (~0.08 EUR)
+ibm_cloud:
+  egress_eur_per_gb: 0.08
+  free_tier_gb_per_month: 0
+  cross_region_eur_per_gb: 0.08
+  cross_az_eur_per_gb: 0.08

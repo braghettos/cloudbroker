@@ -31,7 +31,7 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "open_telekom_cloud", "exoscale", "ionos", "gridscale", "stackit", "elastx", "cyso_cloud", "seeweb", "all"],
+        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "exoscale", "seeweb", "contabo", "gcore", "cherry_servers", "clouding", "ibm_cloud", "sustainability", "all"],
         required=True,
         help="Provider to ingest",
     )
@@ -104,6 +104,11 @@ def _parse() -> argparse.ArgumentParser:
         action="store_true",
         help="With --verify: raise on verification failure (default: log and continue).",
     )
+    ing.add_argument(
+        "--sustainability",
+        action="store_true",
+        help="Also ingest sustainability data (GCP from region-carbon-info, config overrides).",
+    )
     return p
 
 
@@ -117,19 +122,20 @@ PROVIDERS_ALL = [
     "ovh",
     "aruba",
     "upcloud",
-    "open_telekom_cloud",
     "exoscale",
-    "ionos",
-    "gridscale",
-    "stackit",
-    "elastx",
-    "cyso_cloud",
     "seeweb",
+    "contabo",
+    "gcore",
+    "cherry_servers",
+    "clouding",
+    "ibm_cloud",
 ]
 
 
 def _get_providers_to_ingest(provider: str) -> list[str]:
     """Return list of provider slugs to ingest."""
+    if provider == "sustainability":
+        return []
     return [provider] if provider != "all" else list(PROVIDERS_ALL)
 
 
@@ -150,14 +156,13 @@ async def _ingest_provider_instance(
     from connectors import ovh as ovh_conn
     from connectors import scaleway as scaleway_conn
     from connectors import upcloud as upcloud_conn
-    from connectors import open_telekom_cloud as otc_conn
     from connectors import exoscale as exoscale_conn
-    from connectors import ionos as ionos_conn
-    from connectors import gridscale as gridscale_conn
-    from connectors import stackit as stackit_conn
-    from connectors import elastx as elastx_conn
-    from connectors import cyso_cloud as cyso_cloud_conn
     from connectors import seeweb as seeweb_conn
+    from connectors import contabo as contabo_conn
+    from connectors import gcore as gcore_conn
+    from connectors import cherry_servers as cherry_servers_conn
+    from connectors import clouding as clouding_conn
+    from connectors import ibm_cloud as ibm_cloud_conn
 
     conn_map = {
         "aruba": aruba_conn,
@@ -169,14 +174,13 @@ async def _ingest_provider_instance(
         "ovh": ovh_conn,
         "scaleway": scaleway_conn,
         "upcloud": upcloud_conn,
-        "open_telekom_cloud": otc_conn,
         "exoscale": exoscale_conn,
-        "ionos": ionos_conn,
-        "gridscale": gridscale_conn,
-        "stackit": stackit_conn,
-        "elastx": elastx_conn,
-        "cyso_cloud": cyso_cloud_conn,
         "seeweb": seeweb_conn,
+        "contabo": contabo_conn,
+        "gcore": gcore_conn,
+        "cherry_servers": cherry_servers_conn,
+        "clouding": clouding_conn,
+        "ibm_cloud": ibm_cloud_conn,
     }
     conn = conn_map.get(slug)
     if not conn:
@@ -302,11 +306,25 @@ async def run_ingest(
     costs_only: bool = False,
     verify: bool = False,
     verify_fail: bool = False,
+    sustainability: bool = False,
 ) -> None:
     if quick and region is None:
         region = "eu-west-1" if provider == "aws" else ("westeurope" if provider == "azure" else None)
 
-    skip_instances = egress_only or costs_only
+    skip_instances = egress_only or costs_only or provider == "sustainability"
+
+    # Sustainability-only ingestion
+    if provider == "sustainability":
+        from connectors import sustainability as sustainability_conn
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await sustainability_conn.ingest_sustainability(db)
+                await db.commit()
+                logger.info("Sustainability ingestion completed")
+            except Exception as e:
+                logger.error(f"Sustainability ingestion failed: {e}", exc_info=True)
+        return
 
     # Parallel instance ingestion: each provider runs in its own session
     if not skip_instances:
@@ -344,6 +362,17 @@ async def run_ingest(
         for (cost_type, slug), r in zip(cost_task_info, cost_results):
             if isinstance(r, Exception):
                 logger.error(f"{slug} {cost_type} ingestion failed: {r}", exc_info=True)
+
+    if sustainability:
+        from connectors import sustainability as sustainability_conn
+
+        async with AsyncSessionLocal() as db:
+            try:
+                await sustainability_conn.ingest_sustainability(db)
+                await db.commit()
+                logger.info("Sustainability ingestion completed")
+            except Exception as e:
+                logger.error(f"Sustainability ingestion failed: {e}", exc_info=True)
 
     if verify and not skip_instances:
         providers_ingested = _get_providers_to_ingest(provider)
@@ -399,6 +428,7 @@ def main() -> int:
             costs_only=args.costs_only,
             verify=args.verify,
             verify_fail=args.verify_fail,
+            sustainability=args.sustainability,
         )
     )
     return 0

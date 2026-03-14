@@ -5,7 +5,7 @@
 <h1 align="center">CloudBroker</h1>
 
 <p align="center">
-  Multi-cloud compute pricing marketplace &mdash; ingests instance data from 7 providers, normalises prices to EUR, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints.
+  Multi-cloud compute pricing marketplace &mdash; ingests instance data from 15 individual-friendly providers, normalises prices to EUR, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints.
 </p>
 
 ## Architecture
@@ -14,7 +14,7 @@
 graph TB
     subgraph Ingestion ["Ingestion Pipeline"]
         CLI["make ingest-*<br/>(CLI)"]
-        CON["Connectors<br/>GCP · AWS · Azure<br/>Hetzner · Scaleway · OVH<br/>DigitalOcean"]
+        CON["Connectors<br/>GCP · AWS · Azure<br/>Hetzner · Scaleway · OVH · DigitalOcean<br/>Hetzner · Aruba · UpCloud · Exoscale<br/>Seeweb · Contabo · Gcore · Cherry Servers<br/>Clouding.io"]
         SVC["Ingestion Service<br/>(upsert + FX)"]
         CLI --> CON --> SVC
     end
@@ -58,13 +58,13 @@ graph TB
 
 | Aspect | CloudBroker | Infracost Cloud Pricing API | CloudPrice | AWS / GCP / Azure Price APIs |
 |--------|-------------|-----------------------------|------------|-----------------------------|
-| **Providers** | 7: AWS, GCP, Azure, Hetzner, Scaleway, DigitalOcean, OVH | 3: AWS, Azure, GCP | 3: AWS, Azure, GCP | 1 per API |
+| **Providers** | 15 individual-friendly: AWS, GCP, Azure + 12 EU/independent | 3: AWS, Azure, GCP | 3: AWS, Azure, GCP | 1 per API |
 | **Hosting** | Self-hosted | Hosted (SaaS, API key) | Hosted (SaaS) | You call provider directly |
 | **Recommendation** | Ranked by cost + fit, one request | GraphQL query, Terraform-focused | Instance recommendations | Raw listings |
 | **Currency** | Normalised to EUR (FX) | Per-provider | Per-provider | Per-provider |
 | **Primary use** | Autoscaler / burst cost selection | Terraform cost estimation | Pricing lookup, dashboards | Single-cloud billing |
 
-CloudBroker targets **self-hosted** multi-cloud cost selection: 7 providers (including EU-focused Hetzner, Scaleway, OVH), one recommendation endpoint, EUR-normalised. Infracost and CloudPrice are hosted and focus on the big three; provider APIs are single-cloud.
+CloudBroker targets **self-hosted** multi-cloud cost selection: 15 individual-friendly providers (EU-focused: Hetzner, Scaleway, OVH, Aruba, UpCloud, Exoscale, Seeweb, Contabo, Gcore, Cherry Servers, Clouding.io — plus AWS, GCP, Azure), one recommendation endpoint, EUR-normalised. Infracost and CloudPrice are hosted and focus on the big three; provider APIs are single-cloud.
 
 ## Use cases
 
@@ -79,7 +79,7 @@ CloudBroker targets **self-hosted** multi-cloud cost selection: 7 providers (inc
 
 ## Features
 
-- **7 cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean
+- **15 individual-friendly cloud providers** &mdash; GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean, Aruba, UpCloud, Exoscale, Seeweb, Contabo, Gcore, Cherry Servers, Clouding.io
 - **EUR-normalised pricing** &mdash; all prices converted via FX rates
 - **Dual scoring modes** &mdash; legacy (price + fit) or multi-criteria (cost, performance, reliability)
 - **Transparent ranking** &mdash; every recommendation includes an `explain` block
@@ -150,7 +150,7 @@ app/
   services/            # Business logic (recommendations, ingestion, analytics)
 apps/
   ingestor/            # CLI for provider data ingestion
-connectors/            # Provider-specific pricing connectors (GCP, AWS, Azure, Hetzner, Scaleway, OVH, DigitalOcean)
+connectors/            # Provider-specific pricing connectors (one per supported provider)
 migrations/            # Alembic migrations
 scripts/               # Utility scripts (e.g. test_recommendations.sh)
 tests/                 # Pytest test suite
@@ -200,7 +200,7 @@ Run `make help` for the full list. Key targets:
 | `make ingest-hetzner` | Ingest Hetzner Cloud pricing |
 | `make ingest-digitalocean` | Ingest DigitalOcean pricing |
 | `make ingest-ovh` | Ingest OVH Cloud pricing |
-| `make ingest-egress` | Ingest egress rates for all 7 providers |
+| `make ingest-egress` | Ingest egress rates for all supported providers |
 | `make ingest-storage` | Ingest storage rates (costs only) |
 | `make ingest-public-ip` | Ingest public IP rates (costs only) |
 | `make ingest-os-license` | Ingest OS license rates (costs only) |
@@ -285,8 +285,24 @@ See [docs/PRICING_DATA_SOURCES.md](docs/PRICING_DATA_SOURCES.md) for the full li
 - [Article series](docs/articles/) &mdash; four-part intro (problem and product, how it works, interface, scope and run)
 - [Architecture](docs/architecture.md) &mdash; data model, recommendation engine, ingestion pipeline, and integration with Cloudburst
 - [Pricing data sources](docs/PRICING_DATA_SOURCES.md) &mdash; APIs and docs used for each provider; verification commands
+- [Provider use case guide](docs/PROVIDER_USE_CASE_GUIDE.md) &mdash; individual vs. business suitability tiers for every provider
 - [Usage Guide](USAGE_GUIDE.md) &mdash; API examples and workflows
 - **Swagger UI**: http://localhost:8000/docs (when running)
+
+## Enterprise-only providers (not for individual use)
+
+CloudBroker is designed for **individual developers and small teams** who want self-hosted multi-cloud cost optimisation. The following providers were evaluated and removed because they require a business/company account or are exclusively targeted at enterprise customers — making them unsuitable for individual sign-up:
+
+| Provider | Country | Reason |
+|----------|---------|--------|
+| **STACKIT** | 🇩🇪 Germany | Schwarz Group (Lidl/Kaufland) subsidiary; business account required; enterprise-only onboarding |
+| **Open Telekom Cloud** | 🇩🇪 Germany | T-Systems/Deutsche Telekom offering; business customers only; no individual signup |
+| **gridscale** | 🇩🇪 Germany | B2B focus; primarily targets MSPs and enterprise resellers; pricing requires partner agreement |
+| **Elastx** | 🇸🇪 Sweden | OpenStack provider targeting enterprise/SMB only; complex onboarding; no individual signup path |
+| **IONOS** | 🇩🇪 Germany | Company name mandatory on signup in EU locales (Italy and others); business-oriented billing; no individual signup path |
+| **Cyso Cloud** | 🇳🇱 Netherlands | B2B/wholesale OpenStack provider; enterprise certifications (ISO 27001, NEN 7510 healthcare); partner/business onboarding only |
+
+See [docs/PROVIDER_USE_CASE_GUIDE.md](docs/PROVIDER_USE_CASE_GUIDE.md) for the full individual-suitability analysis of all supported providers.
 
 ## License
 

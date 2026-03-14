@@ -175,6 +175,15 @@ async def ingest(
         else:
             memory_gb = float(memory_gb) if memory_gb else 0
         arch = _arch(st.get("architecture"))
+        disk_gb = float(st.get("disk") or 0) or None
+        storage_type_raw = (st.get("storage_type") or "").lower()
+        disk_type: str | None = None
+        if storage_type_raw == "local":
+            disk_type = "local_ssd"
+        elif storage_type_raw == "network":
+            disk_type = "network"
+        cpu_type_raw = (st.get("cpu_type") or "").lower()
+        cpu_type: str | None = cpu_type_raw if cpu_type_raw in ("shared", "dedicated") else None
         it = await ensure_instance_type(
             db,
             provider_id=provider.id,
@@ -183,6 +192,9 @@ async def ingest(
             ram_gb=float(memory_gb),
             family=st.get("description") or None,
             arch=arch,
+            disk_gb=disk_gb,
+            disk_type=disk_type,
+            cpu_type=cpu_type,
         )
         await db.flush()
 

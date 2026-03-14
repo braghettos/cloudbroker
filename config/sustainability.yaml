@@ -1,0 +1,161 @@
+# Sustainability config: ENTSO-E bidding zones, UK/EIA region codes, and manual overrides.
+#
+# Data sources (all free):
+#   ENTSO-E: free EU real-time grid data — register at https://transparency.entsoe.eu
+#   UK Carbon Intensity API: free, no auth — https://api.carbonintensity.org.uk
+#   EIA OpenData: free US grid data — register at https://www.eia.gov/opendata/
+#   Static fallback: Ember Climate yearly country averages (embedded in sustainability_service.py)
+#
+# ENTSO-E EIC codes:
+#   AT=10YAT-APG------L, BE=10YBE----------2, BG=10YCA-BULGARIA-R, CH=10YCH-SWISSGRID-E,
+#   CZ=10YCZ-CEPS-----N, DE=10Y1001A1001A83F, DK-DK1=10YDK-1--------W, DK-DK2=10YDK-2--------M,
+#   EE=10Y1001A1001A39I, ES=10YES-REE------0, FI=10YFI-1--------U, FR=10YFR-RTE------C,
+#   GR=10YGR-HTSO-----Y, HR=10YHR-HEP------M, HU=10YHU-MAVIR----U, IE=10YIE-1001A00010,
+#   IT=10YIT-GRTN-----B, LT=10YLT-1001A0008Q, LU=10YLU-CEGEDEL-NQ, LV=10YLV-1001A00074,
+#   NL=10YNL----------L, NO=10YNO-0--------C, PL=10YPL-AREA-----S, PT=10YPT-REN------W,
+#   RO=10YRO-TEL------P, SE=10YSE-1--------K, SI=10YSI-ELES-----O, SK=10YSK-SEPS-----K,
+#   GB=10YGB----------A (UK, real-time via UK Carbon Intensity API is preferred)
+
+region_to_entsoe_area:
+  # ── Hyperscalers ──────────────────────────────────────────────────────────
+  gcp:
+    europe-west1:      "10YBE----------2"   # Belgium
+    europe-west2:      "10YGB----------A"   # UK → prefer UK Carbon API
+    europe-west3:      "10Y1001A1001A83F"   # Germany
+    europe-west4:      "10YNL----------L"   # Netherlands
+    europe-west6:      "10YCH-SWISSGRID-E"  # Switzerland
+    europe-west8:      "10YIT-GRTN-----B"   # Italy (Milan)
+    europe-west9:      "10YFR-RTE------C"   # France
+    europe-west10:     "10Y1001A1001A83F"   # Germany (Berlin)
+    europe-west12:     "10YIT-GRTN-----B"   # Italy (Turin)
+    europe-north1:     "10YFI-1--------U"   # Finland
+    europe-southwest1: "10YES-REE------0"   # Spain (Madrid)
+    europe-central2:   "10YPL-AREA-----S"   # Poland (Warsaw)
+
+  aws:
+    eu-west-1:  "10YIE-1001A00010"  # Ireland
+    eu-west-2:  "10YGB----------A"  # UK → prefer UK Carbon API
+    eu-west-3:  "10YFR-RTE------C"  # France
+    eu-central-1: "10Y1001A1001A83F" # Germany
+    eu-central-2: "10YCH-SWISSGRID-E" # Switzerland
+    eu-north-1: "10YSE-1--------K"  # Sweden
+    eu-south-1: "10YIT-GRTN-----B"  # Italy
+    eu-south-2: "10YES-REE------0"  # Spain
+
+  azure:
+    westeurope:          "10YNL----------L"    # Netherlands
+    northeurope:         "10YIE-1001A00010"    # Ireland
+    francecentral:       "10YFR-RTE------C"    # France
+    francesouth:         "10YFR-RTE------C"    # France
+    germanywestcentral:  "10Y1001A1001A83F"    # Germany
+    uksouth:             "10YGB----------A"    # UK → prefer UK Carbon API
+    ukwest:              "10YGB----------A"    # UK → prefer UK Carbon API
+    swedencentral:       "10YSE-1--------K"    # Sweden
+    switzerlandnorth:    "10YCH-SWISSGRID-E"  # Switzerland
+    switzerlandwest:     "10YCH-SWISSGRID-E"  # Switzerland
+    italynorth:          "10YIT-GRTN-----B"    # Italy
+    polandcentral:       "10YPL-AREA-----S"    # Poland
+    spaincentral:        "10YES-REE------0"    # Spain
+    norwayeast:          "10YNO-0--------C"    # Norway
+    norwaywest:          "10YNO-0--------C"    # Norway
+    finlandcentral:      "10YFI-1--------U"    # Finland
+
+  # ── EU-focused providers ──────────────────────────────────────────────────
+  hetzner:
+    hel1:   "10YFI-1--------U"   # Helsinki
+    fsn1:   "10Y1001A1001A83F"  # Falkenstein, Germany
+    nbg1:   "10Y1001A1001A83F"  # Nuremberg, Germany
+
+  upcloud:
+    fi-hel1:  "10YFI-1--------U"
+    fi-hel2:  "10YFI-1--------U"
+    de-fra1:  "10Y1001A1001A83F"
+    nl-ams1:  "10YNL----------L"
+    pl-waw1:  "10YPL-AREA-----S"
+    se-sto1:  "10YSE-1--------K"
+    es-mad1:  "10YES-REE------0"
+    uk-lon1:  "10YGB----------A"  # prefer UK Carbon API
+
+  scaleway:
+    fr-par-1: "10YFR-RTE------C"
+    fr-par-2: "10YFR-RTE------C"
+    fr-par-3: "10YFR-RTE------C"
+    nl-ams-1: "10YNL----------L"
+    nl-ams-2: "10YNL----------L"
+    nl-ams-3: "10YNL----------L"
+    pl-waw-1: "10YPL-AREA-----S"
+    pl-waw-2: "10YPL-AREA-----S"
+    pl-waw-3: "10YPL-AREA-----S"
+
+  ovh:
+    sbg:      "10YFR-RTE------C"   # Strasbourg, France
+    gra:      "10YFR-RTE------C"   # Gravelines, France
+    rbx:      "10YBE----------2"   # Roubaix → Belgium zone (close to border)
+    lim:      "10Y1001A1001A83F"   # Limburg, Germany
+    de:       "10Y1001A1001A83F"   # Germany
+    waw:      "10YPL-AREA-----S"   # Warsaw, Poland
+    uk:       "10YGB----------A"   # UK → prefer UK Carbon API
+    lon:      "10YGB----------A"   # London
+
+  digitalocean:
+    fra1:     "10Y1001A1001A83F"  # Frankfurt
+    ams3:     "10YNL----------L"  # Amsterdam
+    lon1:     "10YGB----------A"  # London → prefer UK Carbon API
+
+  # ── Smaller EU providers ──────────────────────────────────────────────────
+  seeweb:
+    it-mi2:   "10YIT-GRTN-----B"  # Milano, Italy
+    it-fr2:   "10YIT-GRTN-----B"  # Frosinone, Italy
+    bg-sof1:  "10YCA-BULGARIA-R"  # Sofia, Bulgaria
+
+  aruba:
+    # Aruba Cloud: Italy (Milan, Arezzo) and Czech Republic
+    it-aw01:  "10YIT-GRTN-----B"
+    it-aw02:  "10YIT-GRTN-----B"
+    cz-aw01:  "10YCZ-CEPS-----N"
+
+  contabo:
+    # Contabo: Germany data centers (Nuremberg, Munich)
+    eu-de-1:  "10Y1001A1001A83F"   # Nuremberg, Germany
+    eu-de-2:  "10Y1001A1001A83F"   # Munich, Germany
+
+  gcore:
+    # Gcore: Luxembourg, Netherlands, Germany, France, Poland, Finland
+    lux-1:    "10YLU-CEGEDEL-NQ"   # Luxembourg
+    lux-2:    "10YLU-CEGEDEL-NQ"   # Luxembourg
+    ams-1:    "10YNL----------L"   # Amsterdam, Netherlands
+    fra-1:    "10Y1001A1001A83F"   # Frankfurt, Germany
+    darm-1:   "10Y1001A1001A83F"   # Darmstadt, Germany
+    par-2:    "10YFR-RTE------C"   # Paris, France
+    waw-1:    "10YPL-AREA-----S"   # Warsaw, Poland
+    hel-1:    "10YFI-1--------U"   # Helsinki, Finland
+
+  cherry_servers:
+    # Cherry Servers: Lithuania, Netherlands, Germany, Sweden
+    eu-lt-1:  "10YLT-1001A0008Q"   # Šiauliai, Lithuania
+    eu-nl-1:  "10YNL----------L"   # Amsterdam, Netherlands
+    eu-de-1:  "10Y1001A1001A83F"   # Frankfurt, Germany
+    eu-se-1:  "10YSE-1--------K"   # Stockholm, Sweden
+
+  clouding:
+    # Clouding.io: Barcelona, Spain
+    es-bcn-1: "10YES-REE------0"   # Barcelona, Spain
+
+
+# ── Manual overrides ──────────────────────────────────────────────────────────
+# Use for:
+#   - Providers with verifiable 100% renewable commitments (PPAs/RECs)
+#   - Regions not reachable by any API
+#   - Corrections when real-time data is inaccurate
+#
+# renewable_energy_pct: 0.0–1.0  (1.0 = 100%)
+# carbon_intensity_g_co2_kwh: gCO2eq/kWh (market-based, not grid-average)
+#
+# Notes:
+#   - AWS has committed to 100% renewable energy by 2025 (achieved in some regions).
+#   - GCP claims 100% renewable matching via RECs but not 24/7 carbon-free.
+#   - Azure committed to 100% renewable by 2025.
+#   - Hetzner uses renewable energy for its Finnish DC.
+#   These are MARKET-BASED values (with RECs), not location-based grid intensity.
+#   Leave empty to use location-based grid data (more conservative/accurate).
+region_overrides: {}

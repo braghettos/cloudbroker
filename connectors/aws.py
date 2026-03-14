@@ -98,6 +98,41 @@ def _parse_vcpu(vcpu_str: str) -> int:
         return 0
 
 
+def _parse_gpu_count(gpu_str: str | None) -> int | None:
+    """Parse AWS gpu attribute to int. Returns None if not present or zero."""
+    if not gpu_str or gpu_str.strip().lower() in ("", "na", "n/a", "none", "0"):
+        return None
+    try:
+        val = int(float(gpu_str.strip()))
+        return val if val > 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_gpu_memory_gb(gpu_memory_str: str | None) -> float | None:
+    """Parse AWS gpuMemory string like '16 GiB' or '80 GiB' to float GB."""
+    if not gpu_memory_str or gpu_memory_str.strip().lower() in ("", "na", "n/a", "none"):
+        return None
+    match = re.match(r"^([\d.]+)\s*GiB$", gpu_memory_str.strip(), re.IGNORECASE)
+    if match:
+        return float(match.group(1))
+    return None
+
+
+def _parse_generation(current_generation: str | None) -> bool | None:
+    """Parse AWS currentGeneration attribute ('Yes'/'No') to bool."""
+    if not current_generation:
+        return None
+    return current_generation.strip().lower() == "yes"
+
+
+def _normalize_network_performance(raw: str | None) -> str | None:
+    """Truncate network performance string to 64 chars."""
+    if not raw:
+        return None
+    return raw.strip()[:64] or None
+
+
 def _map_aws_physical_processor_to_arch(physical_processor: str | None) -> str | None:
     """Map AWS physicalProcessor attribute to our arch (x86_64 or arm64) for recommendations.
 
@@ -151,6 +186,10 @@ def _fetch_ec2_ondemand_for_location(
         {"Type": "TERM_MATCH", "Field": "operatingSystem", "Value": "Linux"},
         {"Type": "TERM_MATCH", "Field": "tenancy", "Value": "Shared"},
         {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "Compute Instance"},
+        # Exclude pre-installed software (SQL Web, SQL Std, etc.) — base Linux price only
+        {"Type": "TERM_MATCH", "Field": "preInstalledSw", "Value": "NA"},
+        # Exclude capacity reservation SKUs; only regular on-demand usage
+        {"Type": "TERM_MATCH", "Field": "capacitystatus", "Value": "Used"},
     ]
     results: list[tuple[dict[str, str], float]] = []
     next_token = None
@@ -324,8 +363,12 @@ async def _run_ondemand_ingest(
             family = (attrs.get("instanceFamily") or "").strip() or None
             if family and len(family) > 64:
                 family = family[:64]
-            generation = None
             arch = _map_aws_physical_processor_to_arch(attrs.get("physicalProcessor"))
+            is_current_gen = _parse_generation(attrs.get("currentGeneration"))
+            gpu_count = _parse_gpu_count(attrs.get("gpu"))
+            gpu_memory_gb = _parse_gpu_memory_gb(attrs.get("gpuMemory"))
+            gpu_model = (attrs.get("elasticGpuType") or "").strip() or None
+            network_performance = _normalize_network_performance(attrs.get("networkPerformance"))
             metadata = (
                 json.dumps(
                     {
@@ -346,8 +389,12 @@ async def _run_ondemand_ingest(
                 vcpu=vcpu,
                 ram_gb=ram_gb,
                 family=family,
-                generation=generation,
                 arch=arch,
+                is_current_gen=is_current_gen,
+                gpu_count=gpu_count,
+                gpu_model=gpu_model,
+                gpu_memory_gb=gpu_memory_gb,
+                network_performance=network_performance,
                 metadata_json=metadata,
             )
             await db.flush()

@@ -208,6 +208,10 @@ async def ingest(
         elif slug.startswith("g-"):
             family = "general-purpose"
 
+        disk_gb = float(size.get("disk") or 0) or None
+        transfer_tb = float(size.get("transfer") or 0) or None
+        is_available = bool(size.get("available", True))
+
         # Ensure instance type
         it = await ensure_instance_type(
             db,
@@ -217,9 +221,17 @@ async def ingest(
             ram_gb=ram_gb,
             family=family,
             arch=arch,
+            disk_gb=disk_gb,
+            disk_type="local_ssd",
+            transfer_tb=transfer_tb,
+            is_available=is_available,
         )
         await db.flush()
         instance_types_seen.add(slug)
+
+        # Skip unavailable sizes
+        if not is_available:
+            continue
 
         # Get available regions for this size
         available_regions = size.get("regions") or []

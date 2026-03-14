@@ -42,8 +42,10 @@ class Price(Base):
         index=True,
     )
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    source_currency: Mapped[str | None] = mapped_column(String(3), nullable=True)
     price_per_hour: Mapped[float] = mapped_column(Float, nullable=False)
     price_eur_per_hour: Mapped[float | None] = mapped_column(Float, nullable=True)
+    effective_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

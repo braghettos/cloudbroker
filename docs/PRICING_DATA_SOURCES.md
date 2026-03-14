@@ -9,14 +9,13 @@ CloudBroker ingests instance pricing from the following APIs and data sources. R
 | GCP | `make verify-gcp` | Google Cloud ADC |
 | Hetzner | `make verify-hetzner` | `HETZNER_API_TOKEN` |
 | Azure | `make verify-azure` | None (public API) |
-| Open Telekom Cloud | `make verify-otc` | None (public API) |
 | OVH | `make verify-ovh` | None (public catalog) |
 | DigitalOcean | `make verify-all` (runs DO) | `DIGITALOCEAN_API_TOKEN` |
 | AWS | `make verify-all` (runs AWS) | AWS credentials |
 | Scaleway | `make verify-all` (runs Scaleway) | `SCALEWAY_SECRET_KEY` |
 | UpCloud | `make verify-all` (runs UpCloud) | `UPCLOUD_API_TOKEN` |
 | Seeweb | `make verify-all` (runs Seeweb) | `SEEWEB_API_TOKEN` |
-| Config (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso) | `make verify-config` | None |
+| Config (Aruba, Exoscale, Contabo, Gcore, Cherry, Clouding) | `make verify-config` | None |
 | **All** | `make verify-all` | Runs all verifications (skips providers without credentials) |
 
 ## Provider APIs & Docs
@@ -31,16 +30,10 @@ CloudBroker ingests instance pricing from the following APIs and data sources. R
 | **Scaleway** | Instance API | [Scaleway Instance API](https://www.scaleway.com/en/developers/api/instance/) | [API keys](https://www.scaleway.com/en/developers/api/instance/) |
 | **OVH** | OVH API / Public Catalog | [OVH API](https://api.ovh.com/) — `GET /cloud/project/{id}/flavor`, [Public Catalog](https://api.ovh.com/1.0/order/catalog/public/cloud) | OVH keys / none for catalog |
 | **UpCloud** | REST API | [UpCloud API](https://developers.upcloud.com/1.2/) — `GET /plan`, `GET /zone`, `GET /price` | Username + password |
-| **Open Telekom Cloud** | Price API | [OTC Price API](https://calculator.otc-service.com/en/open-telekom-price-api/) | None (public) |
 | **Seeweb** | ECS API | [Seeweb ECS API](https://api.seeweb.it/ecs/v2) | [API token](https://docs.seeweb.it/) |
 | **Aruba** | Config | [Aruba Cloud pricing](https://www.arubacloud.com/pricing/) | None |
 | **Exoscale** | Config | [Exoscale pricing](https://www.exoscale.com/pricing/) | None |
-| **IONOS** | Config | [IONOS Cloud pricing](https://www.ionos.com/cloud/) | None |
-| **gridscale** | Config | [gridscale pricing](https://www.gridscale.io/) | None |
-| **STACKIT** | Config | [STACKIT pricing](https://www.stackit.de/) | None |
-| **Elastx** | Config | [Elastx pricing](https://www.elastx.se/) | None |
-| **Cyso Cloud** | Config | [Cyso Cloud pricing](https://www.cyso.cloud/) | None |
 
 ## Config-based providers
 
-Config-based providers (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso Cloud) use static pricing from the connector source code, derived from publicly published pricing pages. These are not verified against an API; update the config when provider pricing changes.
+Config-based providers (Aruba, Exoscale, Contabo, Gcore, Cherry Servers, Clouding.io) use static pricing from the connector source code, derived from publicly published pricing pages. These are not verified against an API; update the config when provider pricing changes.

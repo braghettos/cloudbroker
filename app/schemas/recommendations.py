@@ -92,6 +92,10 @@ class RecommendationRequest(BaseModel):
         default=None,
         description="Optional list of instance type names to exclude (e.g. after provisioning failure).",
     )
+    excluded_instance_type_prefixes: list[str] | None = Field(
+        default=None,
+        description="Optional list of instance type name prefixes to exclude (e.g. 'Standard_B' for all Azure B-series). Case-insensitive match.",
+    )
     cost_weight: float | None = Field(
         default=None,
         ge=0.0,
@@ -159,6 +163,45 @@ class RecommendationRequest(BaseModel):
         default=None,
         description="GPU type filter: nvidia-t4, nvidia-a100, etc. When set with min_gpu_count.",
     )
+    min_renewable_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Minimum renewable energy share (0-1, e.g. 1.0 for 100%). Filters to regions meeting this threshold.",
+    )
+    providers_publish_carbon_only: bool = Field(
+        default=False,
+        description="When True, restrict to providers that publish carbon emissions (GCP, AWS, Azure, UpCloud).",
+    )
+    max_carbon_intensity: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Maximum grid carbon intensity (gCO2eq/kWh). Filters to regions at or below this value.",
+    )
+
+    # ── New instance-type hardware filters ──────────────────────────────────
+    min_disk_gb: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Minimum local/attached disk in GB (uses InstanceType.disk_gb). Only matches instances with at least this much disk.",
+    )
+    current_gen_only: bool = Field(
+        default=False,
+        description="When True, restrict to current-generation instance types (is_current_gen=True). Excludes legacy families (e.g. AWS m4, GCP n1).",
+    )
+    min_transfer_tb: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Minimum included data transfer in TB/month (uses InstanceType.transfer_tb). Useful for bandwidth-heavy workloads.",
+    )
+    cpu_type: str | None = Field(
+        default=None,
+        description="CPU type filter: 'dedicated' or 'shared'. Matches InstanceType.cpu_type.",
+    )
+    network_performance: str | None = Field(
+        default=None,
+        description="Minimum network performance tier substring (e.g. '10 Gigabit', 'High'). Substring match on InstanceType.network_performance.",
+    )
 
 
 class RecommendationExplain(BaseModel):
@@ -223,6 +266,10 @@ class RecommendationExplain(BaseModel):
     cross_az_cost_eur_per_hour: float | None = Field(
         default=None,
         description="Cross-AZ traffic cost component of TCO (EUR/h).",
+    )
+    sustainability_score: float | None = Field(
+        default=None,
+        description="Sustainability score (0-1, higher = greener). Present when sustainability filters used.",
     )
 
 

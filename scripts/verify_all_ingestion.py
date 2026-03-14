@@ -32,14 +32,13 @@ VERIFY_MODULES = [
     ("GCP", "connectors.gcp_verify"),
     ("Hetzner", "connectors.hetzner_verify"),
     ("Azure", "connectors.azure_verify"),
-    ("Open Telekom Cloud", "connectors.otc_verify"),
     ("OVH", "connectors.ovh_verify"),
     ("DigitalOcean", "connectors.digitalocean_verify"),
     ("AWS", "connectors.aws_verify"),
     ("Scaleway", "connectors.scaleway_verify"),
     ("UpCloud", "connectors.upcloud_verify"),
     ("Seeweb", "connectors.seeweb_verify"),
-    ("Config (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso)", "connectors.config_verify"),
+    ("Config (Aruba, Exoscale, Contabo, Gcore, Cherry, Clouding)", "connectors.config_verify"),
 ]
 
 
@@ -58,7 +57,7 @@ async def main() -> int:
     )
     parser.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "azure", "otc", "ovh", "digitalocean", "aws", "scaleway", "upcloud", "seeweb", "config"],
+        choices=["gcp", "hetzner", "azure", "ovh", "digitalocean", "aws", "scaleway", "upcloud", "seeweb", "config"],
         help="Verify only this provider (default: all)",
     )
     args = parser.parse_args()
@@ -70,14 +69,13 @@ async def main() -> int:
         "gcp": ("GCP", "connectors.gcp_verify"),
         "hetzner": ("Hetzner", "connectors.hetzner_verify"),
         "azure": ("Azure", "connectors.azure_verify"),
-        "otc": ("Open Telekom Cloud", "connectors.otc_verify"),
         "ovh": ("OVH", "connectors.ovh_verify"),
         "digitalocean": ("DigitalOcean", "connectors.digitalocean_verify"),
         "aws": ("AWS", "connectors.aws_verify"),
         "scaleway": ("Scaleway", "connectors.scaleway_verify"),
         "upcloud": ("UpCloud", "connectors.upcloud_verify"),
         "seeweb": ("Seeweb", "connectors.seeweb_verify"),
-        "config": ("Config (Aruba, Exoscale, IONOS, gridscale, STACKIT, Elastx, Cyso)", "connectors.config_verify"),
+        "config": ("Config (Aruba, Exoscale, Contabo, Gcore, Cherry, Clouding)", "connectors.config_verify"),
     }
     modules_to_run = [provider_filter[args.provider]] if args.provider else VERIFY_MODULES
 

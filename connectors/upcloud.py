@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import os
 from decimal import Decimal
@@ -19,6 +18,7 @@ from app.services.ingestion import (
     ensure_region,
     append_price,
 )
+from connectors._http import fetch_with_retry
 
 logger = get_logger(__name__)
 
@@ -37,7 +37,6 @@ ZONE_PREFIX_TO_COUNTRY = {
 EU_COUNTRIES = {"FI", "DE", "NL"}
 
 UPCLOUD_TIMEOUT = 30.0
-UPCLOUD_FETCH_RETRIES = 3
 
 
 def _auth_headers_from_token(token: str) -> dict[str, str]:
@@ -51,41 +50,14 @@ def _auth_headers_from_credentials(username: str, password: str) -> dict[str, st
     return {"Authorization": f"Basic {creds}"}
 
 
-async def _fetch_with_retry(
-    client: httpx.AsyncClient,
-    method: str,
-    url: str,
-    **kwargs,
-) -> dict:
-    """Fetch with retries for transient failures."""
-    last_err = None
-    for attempt in range(1, UPCLOUD_FETCH_RETRIES + 1):
-        try:
-            r = await client.request(method, url, **kwargs)
-            r.raise_for_status()
-            return r.json()
-        except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as e:
-            last_err = e
-            if attempt < UPCLOUD_FETCH_RETRIES:
-                logger.warning(
-                    "UpCloud fetch attempt %s/%s failed: %s, retrying in 5s...",
-                    attempt,
-                    UPCLOUD_FETCH_RETRIES,
-                    e,
-                )
-                await asyncio.sleep(5)
-    raise last_err
-
-
 async def _fetch_plans(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch available plans from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
-        data = await _fetch_with_retry(
-            client,
-            "GET",
-            f"{UPCLOUD_BASE}/plan",
-            headers=auth_headers,
+        resp = await fetch_with_retry(
+            client, "GET", f"{UPCLOUD_BASE}/plan",
+            headers=auth_headers, caller="upcloud",
         )
+    data = resp.json()
     plans_obj = data.get("plans") or {}
     plans_list = plans_obj.get("plan") if isinstance(plans_obj, dict) else []
     return plans_list if isinstance(plans_list, list) else []
@@ -94,12 +66,11 @@ async def _fetch_plans(auth_headers: dict[str, str]) -> list[dict]:
 async def _fetch_zones(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch available zones from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
-        data = await _fetch_with_retry(
-            client,
-            "GET",
-            f"{UPCLOUD_BASE}/zone",
-            headers=auth_headers,
+        resp = await fetch_with_retry(
+            client, "GET", f"{UPCLOUD_BASE}/zone",
+            headers=auth_headers, caller="upcloud",
         )
+    data = resp.json()
     zones_obj = data.get("zones") or {}
     zones_list = zones_obj.get("zone") if isinstance(zones_obj, dict) else []
     return zones_list if isinstance(zones_list, list) else []
@@ -108,12 +79,11 @@ async def _fetch_zones(auth_headers: dict[str, str]) -> list[dict]:
 async def _fetch_prices(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch pricing by zone from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
-        data = await _fetch_with_retry(
-            client,
-            "GET",
-            f"{UPCLOUD_BASE}/price",
-            headers=auth_headers,
+        resp = await fetch_with_retry(
+            client, "GET", f"{UPCLOUD_BASE}/price",
+            headers=auth_headers, caller="upcloud",
         )
+    data = resp.json()
     prices_obj = data.get("prices") or {}
     zones_list = prices_obj.get("zone") if isinstance(prices_obj, dict) else []
     return zones_list if isinstance(zones_list, list) else []
@@ -205,6 +175,11 @@ async def ingest(
         cpu = int(plan.get("core_number") or 0)
         ram_mb = int(plan.get("memory_amount") or 0)
         ram_gb = float(ram_mb) / 1024.0 if ram_mb else 0.0
+        # UpCloud reports storage in GB and traffic in GiB
+        storage_gb = float(plan.get("storage_size") or 0) or None
+        # public_traffic_out is in GiB; convert to TB (1 TiB ≈ 1.0995 TB; approximate as 1 TB = 1024 GiB)
+        traffic_gib = float(plan.get("public_traffic_out") or 0)
+        transfer_tb = (traffic_gib / 1024.0) if traffic_gib > 0 else None
 
         it = await ensure_instance_type(
             db,
@@ -214,6 +189,9 @@ async def ingest(
             ram_gb=ram_gb,
             family="cloud",
             arch="x86_64",
+            disk_gb=storage_gb,
+            disk_type="local_ssd",
+            transfer_tb=transfer_tb,
         )
         await db.flush()
         instance_types_seen.add(name)
@@ -229,7 +207,9 @@ async def ingest(
             if isinstance(price_val, dict):
                 price_val = price_val.get("price")
             try:
-                eur_per_hour = float(Decimal(str(price_val)))
+                raw = float(Decimal(str(price_val)))
+                # UpCloud API 1.2 returns price in 0.01 EUR units (cf. website €0.0045/h vs API 0.4464)
+                eur_per_hour = raw / 100.0
             except (TypeError, ValueError):
                 continue
             if eur_per_hour <= 0:

@@ -12,6 +12,7 @@ class PriceBase(BaseModel):
 
     purchase_model: PurchaseModel
     currency: str = Field(default="USD", min_length=3, max_length=3)
+    source_currency: str | None = Field(None, min_length=3, max_length=3, description="Original currency before EUR conversion")
     price_per_hour: float = Field(..., ge=0)
 
 
@@ -38,4 +39,6 @@ class PriceResponse(PriceBase):
     id: int
     instance_type_id: int
     region_id: int
+    price_eur_per_hour: float | None = None
+    effective_date: datetime | None = None
     timestamp: datetime

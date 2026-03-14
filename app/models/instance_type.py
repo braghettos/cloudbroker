@@ -1,6 +1,6 @@
 """InstanceType model for compute marketplace."""
 
-from sqlalchemy import Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -25,6 +25,15 @@ class InstanceType(Base):
     ram_gb: Mapped[float] = mapped_column(Float, nullable=False)
     arch: Mapped[str | None] = mapped_column(String(32), nullable=True)
     gpu_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gpu_model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gpu_memory_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disk_gb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    disk_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    network_performance: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cpu_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    is_current_gen: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    transfer_tb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     metadata_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     provider: Mapped["Provider"] = relationship("Provider", back_populates="instance_types")

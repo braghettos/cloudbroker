@@ -2,7 +2,7 @@
 
 import enum
 
-from sqlalchemy import Enum, String
+from sqlalchemy import Boolean, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -29,6 +29,9 @@ class Provider(Base):
         Enum(ProviderType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ProviderType.REGIONAL,
+    )
+    publishes_carbon_emissions: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
     )
 
     regions: Mapped[list["Region"]] = relationship(

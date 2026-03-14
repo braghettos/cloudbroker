@@ -146,16 +146,20 @@ async def ingest(
         name = (plan.get("name") or "").strip()
         if not name:
             continue
-        if not plan.get("available", True):
-            continue
-        # Skip GPU plans for now (focus on compute)
-        gpu = plan.get("gpu") or "0"
-        if str(gpu) != "0":
-            continue
+
+        is_available = bool(plan.get("available", True))
 
         cpu = int(plan.get("cpu") or 0)
         ram_mb = int(plan.get("ram") or 0)
         ram_gb = float(ram_mb) / 1024.0 if ram_mb else 0.0
+
+        # GPU count: Seeweb returns gpu as string or int (e.g. "1", "0")
+        gpu_raw = plan.get("gpu") or "0"
+        try:
+            gpu_count_val = int(str(gpu_raw).strip())
+        except (ValueError, TypeError):
+            gpu_count_val = 0
+        gpu_count: int | None = gpu_count_val if gpu_count_val > 0 else None
 
         eur_per_hour = _price_per_hour_eur(plan)
         if eur_per_hour is None or eur_per_hour <= 0:
@@ -168,11 +172,17 @@ async def ingest(
             name=name,
             vcpu=cpu,
             ram_gb=ram_gb,
-            family="ecs",
+            family="ecs-gpu" if gpu_count else "ecs",
             arch="x86_64",
+            gpu_count=gpu_count,
+            is_available=is_available,
         )
         await db.flush()
         instance_types_seen.add(name)
+
+        # Don't insert prices for unavailable plans
+        if not is_available:
+            continue
 
         available_regions = plan.get("available_regions") or []
         for reg_info in available_regions:

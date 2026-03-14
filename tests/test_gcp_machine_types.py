@@ -1,5 +1,10 @@
-"""Test GCP machine type price computation from unit prices."""
+"""Test GCP machine type price computation from unit prices.
 
+Tests that call `ingest()` require live GCP credentials (GOOGLE_APPLICATION_CREDENTIALS
++ GOOGLE_CLOUD_PROJECT) and are skipped automatically when those are absent.
+"""
+
+import os
 import pytest
 from datetime import datetime, timezone, timedelta
 
@@ -9,10 +14,29 @@ from app.models.provider import ProviderType
 from app.models.price import PurchaseModel
 from app.services.ingestion import ensure_provider, ensure_region, ensure_instance_type, append_price
 from connectors.gcp import GCP_CPU_PSEUDO_NAME, GCP_RAM_PSEUDO_NAME
-from connectors.gcp_machine_types import E2_MACHINE_TYPES, ingest
+from connectors.gcp_machine_types import ingest
+
+# Minimal reference specs for the second test (previously from static catalog)
+_E2_SPOT_CHECK = [
+    ("e2-standard-2", 2, 8.0, "e2", "x86_64"),
+    ("e2-standard-4", 4, 16.0, "e2", "x86_64"),
+    ("e2-highmem-4", 4, 32.0, "e2", "x86_64"),
+    ("e2-highcpu-4", 4, 4.0, "e2", "x86_64"),
+    ("e2-medium", 2, 4.0, "e2", "x86_64"),
+]
+
+_HAS_GCP_CREDENTIALS = bool(
+    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") or os.environ.get("GOOGLE_CLOUD_CREDENTIALS")
+) and bool(os.environ.get("GOOGLE_CLOUD_PROJECT"))
+
+requires_gcp = pytest.mark.skipif(
+    not _HAS_GCP_CREDENTIALS,
+    reason="GCP credentials (GOOGLE_APPLICATION_CREDENTIALS + GOOGLE_CLOUD_PROJECT) not configured",
+)
 
 
 @pytest.mark.asyncio
+@requires_gcp
 async def test_e2_standard_2_price_computation():
     """
     Test that e2-standard-2 price is computed correctly:
@@ -143,6 +167,7 @@ async def test_e2_standard_2_price_computation():
 
 
 @pytest.mark.asyncio
+@requires_gcp
 async def test_all_e2_machine_types_created():
     """Test that all E2 machine types from catalog are created."""
     # Note: This test still focuses on E2 for backward compatibility
@@ -213,22 +238,22 @@ async def test_all_e2_machine_types_created():
         await ingest(db, only_eu=True, purchase_model="on_demand")
         await db.commit()
 
-        # Verify all machine types exist
+        # Verify common E2 machine types exist (spot-check; live catalog may have more)
         from sqlalchemy import select, delete
 
-        for spec in E2_MACHINE_TYPES:
+        for name, vcpu, ram_gb, family, arch in _E2_SPOT_CHECK:
             stmt = (
                 select(InstanceType)
                 .where(InstanceType.provider_id == provider.id)
-                .where(InstanceType.name == spec.name)
+                .where(InstanceType.name == name)
             )
             result = await db.execute(stmt)
             instance_type = result.scalars().first()
-            assert instance_type is not None, f"Machine type {spec.name} not found"
-            assert instance_type.vcpu == spec.vcpu
-            assert instance_type.ram_gb == spec.ram_gb
-            assert instance_type.family == spec.family
-            assert instance_type.arch == spec.arch
+            assert instance_type is not None, f"Machine type {name} not found"
+            assert instance_type.vcpu == vcpu
+            assert instance_type.ram_gb == ram_gb
+            assert instance_type.family == family
+            assert instance_type.arch == arch
 
         # Cleanup: delete in order respecting foreign keys
         await db.execute(

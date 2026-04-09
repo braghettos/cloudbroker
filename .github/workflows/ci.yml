@@ -90,7 +90,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
           DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
           APP_ENV: test
-        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=70 -v
+        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=25 -v
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

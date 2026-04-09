@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.models import InstanceType, Price, Provider, Region
+from app.models import InstanceType, Price, Provider
 from app.models.price import PurchaseModel
 from connectors.ovh import _fetch_public_catalog_prices
 
@@ -52,19 +52,47 @@ async def verify_ingested_prices(
         if plan not in catalog:
             continue
         expected = catalog[plan]
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == plan).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == plan)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"OVH {plan}: instance type not in DB", details={"catalog_eur": expected}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"OVH {plan}: instance type not in DB", details={"catalog_eur": expected}
+                )
+            )
             continue
-        price_stmt = select(Price).where(Price.instance_type_id == it.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(5)
+        price_stmt = (
+            select(Price)
+            .where(Price.instance_type_id == it.id)
+            .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+            .limit(5)
+        )
         price_rows = list((await db.execute(price_stmt)).scalars().all())
         if not price_rows:
-            results.append(VerificationResult(passed=False, message=f"OVH {plan}: no price in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"OVH {plan}: no price in DB", details={"expected": expected})
+            )
             continue
         stored = price_rows[0].price_eur_per_hour or price_rows[0].price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"OVH {plan}: price mismatch", details={"expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)}))
+            results.append(
+                VerificationResult(
+                    passed=False,
+                    message=f"OVH {plan}: price mismatch",
+                    details={"expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)},
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"OVH {plan}: OK ({stored:.4f} EUR/hr)"))
 

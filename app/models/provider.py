@@ -30,9 +30,7 @@ class Provider(Base):
         nullable=False,
         default=ProviderType.REGIONAL,
     )
-    publishes_carbon_emissions: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    publishes_carbon_emissions: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     regions: Mapped[list["Region"]] = relationship(
         "Region",

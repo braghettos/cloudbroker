@@ -30,12 +30,7 @@ async def list_prices(
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[PriceResponse]:
     """List prices with filters and pagination."""
-    base = (
-        select(Price)
-        .join(InstanceType)
-        .join(Region)
-        .join(Provider, InstanceType.provider_id == Provider.id)
-    )
+    base = select(Price).join(InstanceType).join(Region).join(Provider, InstanceType.provider_id == Provider.id)
     pq = PaginatedQuery(base, Price)
     pq.join_count(InstanceType).join_count(Region).join_count(Provider, InstanceType.provider_id == Provider.id)
 

@@ -47,7 +47,10 @@ async def fetch_with_retry(
                 if attempt < retries:
                     logger.warning(
                         "%sHTTP 429 on attempt %s/%s, retrying in %.1fs",
-                        label, attempt, retries, retry_after,
+                        label,
+                        attempt,
+                        retries,
+                        retry_after,
                     )
                     await asyncio.sleep(retry_after)
                     continue
@@ -56,7 +59,11 @@ async def fetch_with_retry(
             if resp.status_code in (502, 503, 504) and attempt < retries:
                 logger.warning(
                     "%sHTTP %s on attempt %s/%s, retrying in %.1fs",
-                    label, resp.status_code, attempt, retries, backoff,
+                    label,
+                    resp.status_code,
+                    attempt,
+                    retries,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
                 continue
@@ -69,7 +76,11 @@ async def fetch_with_retry(
             if attempt < retries:
                 logger.warning(
                     "%sAttempt %s/%s failed (%s), retrying in %.1fs",
-                    label, attempt, retries, exc, backoff,
+                    label,
+                    attempt,
+                    retries,
+                    exc,
+                    backoff,
                 )
                 await asyncio.sleep(backoff)
 

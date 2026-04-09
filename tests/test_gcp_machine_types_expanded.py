@@ -193,9 +193,7 @@ async def test_n1_standard_4_price_computation():
         # Cleanup
         await db.execute(delete(Price).where(Price.region_id == region.id))
         await db.execute(
-            delete(InstanceType)
-            .where(InstanceType.provider_id == provider.id)
-            .where(InstanceType.name.like("n1-%"))
+            delete(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name.like("n1-%"))
         )
         await db.execute(delete(Region).where(Region.id == region.id))
         await db.commit()

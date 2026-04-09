@@ -6,11 +6,9 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from connectors._cloud_clients import get_gcp_billing_client
 
 logger = get_logger(__name__)
-
-
-from connectors._cloud_clients import get_gcp_billing_client
 
 
 def _is_network_egress_sku(sku) -> bool:

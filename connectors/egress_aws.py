@@ -9,15 +9,13 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from connectors._cloud_clients import get_aws_pricing_client
 
 logger = get_logger(__name__)
 
 # AWS Pricing API: data transfer is under AmazonEC2 with usageType filter
 # EU (Ireland) eu-west-1 as representative region
 _REP_LOCATION = "EU (Ireland)"
-
-
-from connectors._cloud_clients import get_aws_pricing_client
 
 
 def _fetch_data_transfer_products_sync() -> list[dict]:

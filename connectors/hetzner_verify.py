@@ -76,9 +76,7 @@ async def verify_ingested_prices(
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:
-        results.append(
-            VerificationResult(passed=True, message="Hetzner verify only supports on_demand; skipping")
-        )
+        results.append(VerificationResult(passed=True, message="Hetzner verify only supports on_demand; skipping"))
         return results
 
     server_types = await _fetch_server_types(token)
@@ -107,13 +105,17 @@ async def verify_ingested_prices(
             continue
 
         it = (
-            await db.execute(
-                select(InstanceType)
-                .where(InstanceType.provider_id == provider.id)
-                .where(InstanceType.name == type_name)
-                .limit(1)
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == type_name)
+                    .limit(1)
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
         if not it:
             results.append(
                 VerificationResult(
@@ -191,7 +193,5 @@ async def verify_ingested_prices(
             )
 
     if fail_on_mismatch and any(not r.passed for r in results):
-        raise RuntimeError(
-            "Hetzner verification failed: " + "; ".join(r.message for r in results if not r.passed)
-        )
+        raise RuntimeError("Hetzner verification failed: " + "; ".join(r.message for r in results if not r.passed))
     return results

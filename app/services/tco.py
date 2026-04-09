@@ -218,7 +218,9 @@ async def compute_tco(
             else 0.0
         )
         storage_cost = (
-            compute_storage_cost_eur_per_hour(min_storage_gb, storage_type, c.provider_slug, c.region_slug, storage_rates)
+            compute_storage_cost_eur_per_hour(
+                min_storage_gb, storage_type, c.provider_slug, c.region_slug, storage_rates
+            )
             if use_storage_tco
             else 0.0
         )

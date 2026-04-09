@@ -15,13 +15,11 @@ from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
 from app.services.ingestion import pick_one_per_logical_product
 from connectors.azure import (
-    AZURE_RETAIL_PRICES_URL,
     AZURE_REGIONS,
     _extract_hourly_price_usd,
     _fetch_retail_prices_page,
     _is_linux_product,
     _is_spot_vm_item,
-    parse_azure_vm_specs_heuristic,
 )
 
 logger = get_logger(__name__)
@@ -94,7 +92,15 @@ async def verify_ingested_prices(
         results.append(VerificationResult(passed=False, message="Azure provider not found in DB"))
         return results
 
-    region = (await db.execute(select(Region).where(Region.provider_id == provider.id).where(Region.slug == SAMPLE_REGION).limit(1))).scalars().first()
+    region = (
+        (
+            await db.execute(
+                select(Region).where(Region.provider_id == provider.id).where(Region.slug == SAMPLE_REGION).limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
     if not region:
         results.append(VerificationResult(passed=False, message="Azure westeurope region not found"))
         return results
@@ -103,18 +109,51 @@ async def verify_ingested_prices(
         if sku not in api_prices:
             continue
         expected = api_prices[sku]
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == sku).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == sku)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
             results.append(VerificationResult(passed=False, message=f"Azure {sku}: instance type not in DB"))
             continue
-        price_row = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == purchase).limit(1))).scalars().first()
+        price_row = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == purchase)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not price_row:
-            results.append(VerificationResult(passed=False, message=f"Azure {sku}: no price in DB", details={"expected_eur": expected}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"Azure {sku}: no price in DB", details={"expected_eur": expected}
+                )
+            )
             continue
         stored = price_row.price_eur_per_hour or price_row.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"Azure {sku}: price mismatch", details={"expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)}))
+            results.append(
+                VerificationResult(
+                    passed=False,
+                    message=f"Azure {sku}: price mismatch",
+                    details={"expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)},
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"Azure {sku}: OK ({stored:.4f} EUR/hr)"))
 

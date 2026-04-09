@@ -29,9 +29,15 @@ SCALEWAY_CATALOG_URL = "https://api.scaleway.com/product-catalog/v2alpha1/public
 
 # Scaleway availability zones
 SCALEWAY_ZONES = [
-    "fr-par-1", "fr-par-2", "fr-par-3",
-    "nl-ams-1", "nl-ams-2", "nl-ams-3",
-    "pl-waw-1", "pl-waw-2", "pl-waw-3",
+    "fr-par-1",
+    "fr-par-2",
+    "fr-par-3",
+    "nl-ams-1",
+    "nl-ams-2",
+    "nl-ams-3",
+    "pl-waw-1",
+    "pl-waw-2",
+    "pl-waw-3",
 ]
 
 ZONE_MAP = {
@@ -54,82 +60,92 @@ ZONE_MAP = {
 
 _INSTANCE_SPECS: dict[str, tuple[int, float, str, str, str | None, int | None, str | None, float | None]] = {
     # Development / Shared — DEV1
-    "DEV1-S":    (2,  2.0,  "general-purpose", "x86_64", "shared", None, None, None),
-    "DEV1-M":    (3,  4.0,  "general-purpose", "x86_64", "shared", None, None, None),
-    "DEV1-L":    (4,  8.0,  "general-purpose", "x86_64", "shared", None, None, None),
-    "DEV1-XL":   (4,  12.0, "general-purpose", "x86_64", "shared", None, None, None),
+    "DEV1-S": (2, 2.0, "general-purpose", "x86_64", "shared", None, None, None),
+    "DEV1-M": (3, 4.0, "general-purpose", "x86_64", "shared", None, None, None),
+    "DEV1-L": (4, 8.0, "general-purpose", "x86_64", "shared", None, None, None),
+    "DEV1-XL": (4, 12.0, "general-purpose", "x86_64", "shared", None, None, None),
     # PLAY2 — ARM (shared)
-    "PLAY2-PICO":  (1,  1.0,  "general-purpose", "arm64", "shared", None, None, None),
-    "PLAY2-NANO":  (1,  2.0,  "general-purpose", "arm64", "shared", None, None, None),
-    "PLAY2-MICRO": (2,  4.0,  "general-purpose", "arm64", "shared", None, None, None),
+    "PLAY2-PICO": (1, 1.0, "general-purpose", "arm64", "shared", None, None, None),
+    "PLAY2-NANO": (1, 2.0, "general-purpose", "arm64", "shared", None, None, None),
+    "PLAY2-MICRO": (2, 4.0, "general-purpose", "arm64", "shared", None, None, None),
     # STARDUST1 — Budget
-    "STARDUST1-S": (1,  1.0,  "general-purpose", "x86_64", "shared", None, None, None),
+    "STARDUST1-S": (1, 1.0, "general-purpose", "x86_64", "shared", None, None, None),
     # General-Purpose — GP1
-    "GP1-XS":    (4,  16.0, "general-purpose", "x86_64", "dedicated", None, None, None),
-    "GP1-S":     (8,  32.0, "general-purpose", "x86_64", "dedicated", None, None, None),
-    "GP1-M":     (16, 64.0, "general-purpose", "x86_64", "dedicated", None, None, None),
-    "GP1-L":     (32, 128.0,"general-purpose", "x86_64", "dedicated", None, None, None),
-    "GP1-XL":    (48, 256.0,"general-purpose", "x86_64", "dedicated", None, None, None),
+    "GP1-XS": (4, 16.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "GP1-S": (8, 32.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "GP1-M": (16, 64.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "GP1-L": (32, 128.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "GP1-XL": (48, 256.0, "general-purpose", "x86_64", "dedicated", None, None, None),
     # Performance — PRO2
-    "PRO2-XXS":  (2,  8.0,  "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "PRO2-XS":   (4,  16.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "PRO2-S":    (8,  32.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "PRO2-M":    (16, 64.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "PRO2-L":    (32, 128.0,"compute-optimized", "x86_64", "dedicated", None, None, None),
+    "PRO2-XXS": (2, 8.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "PRO2-XS": (4, 16.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "PRO2-S": (8, 32.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "PRO2-M": (16, 64.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "PRO2-L": (32, 128.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
     # Enterprise — ENT1
-    "ENT1-XXS":  (2,  8.0,  "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-XS":   (4,  16.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-S":    (8,  32.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-M":    (16, 64.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-L":    (32, 128.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-XL":   (64, 256.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
-    "ENT1-2XL":  (96, 384.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-XXS": (2, 8.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-XS": (4, 16.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-S": (8, 32.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-M": (16, 64.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-L": (32, 128.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-XL": (64, 256.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "ENT1-2XL": (96, 384.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
     # POP2 — Latest gen
-    "POP2-2C-8G":   (2,  8.0,  "general-purpose", "x86_64", "dedicated", None, None, None),
-    "POP2-4C-16G":  (4,  16.0, "general-purpose", "x86_64", "dedicated", None, None, None),
-    "POP2-8C-32G":  (8,  32.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "POP2-2C-8G": (2, 8.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "POP2-4C-16G": (4, 16.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "POP2-8C-32G": (8, 32.0, "general-purpose", "x86_64", "dedicated", None, None, None),
     "POP2-16C-64G": (16, 64.0, "general-purpose", "x86_64", "dedicated", None, None, None),
-    "POP2-32C-128G":(32, 128.0,"general-purpose", "x86_64", "dedicated", None, None, None),
-    "POP2-64C-256G":(64, 256.0,"general-purpose", "x86_64", "dedicated", None, None, None),
+    "POP2-32C-128G": (32, 128.0, "general-purpose", "x86_64", "dedicated", None, None, None),
+    "POP2-64C-256G": (64, 256.0, "general-purpose", "x86_64", "dedicated", None, None, None),
     # POP2-HM — High memory
-    "POP2-HM-2C-16G":  (2,  16.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HM-4C-32G":  (4,  32.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HM-8C-64G":  (8,  64.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HM-16C-128G":(16, 128.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HM-32C-256G":(32, 256.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HM-64C-512G":(64, 512.0,"memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-2C-16G": (2, 16.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-4C-32G": (4, 32.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-8C-64G": (8, 64.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-16C-128G": (16, 128.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-32C-256G": (32, 256.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HM-64C-512G": (64, 512.0, "memory-optimized", "x86_64", "dedicated", None, None, None),
     # POP2-HC — High CPU
-    "POP2-HC-2C-4G":  (2,  4.0,  "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HC-4C-8G":  (4,  8.0,  "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HC-8C-16G": (8,  16.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HC-16C-32G":(16, 32.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HC-32C-64G":(32, 64.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
-    "POP2-HC-64C-128G":(64,128.0,"compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-2C-4G": (2, 4.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-4C-8G": (4, 8.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-8C-16G": (8, 16.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-16C-32G": (16, 32.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-32C-64G": (32, 64.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
+    "POP2-HC-64C-128G": (64, 128.0, "compute-optimized", "x86_64", "dedicated", None, None, None),
     # GPU — H100, L40S
-    "H100-1-80G":  (20, 160.0, "gpu", "x86_64", "dedicated", 1, "nvidia-h100", 80.0),
+    "H100-1-80G": (20, 160.0, "gpu", "x86_64", "dedicated", 1, "nvidia-h100", 80.0),
     "H100-2-160G": (40, 320.0, "gpu", "x86_64", "dedicated", 2, "nvidia-h100", 160.0),
-    "L40S-1-48G":  (12, 96.0,  "gpu", "x86_64", "dedicated", 1, "nvidia-l40s", 48.0),
-    "L40S-2-96G":  (24, 192.0, "gpu", "x86_64", "dedicated", 2, "nvidia-l40s", 96.0),
+    "L40S-1-48G": (12, 96.0, "gpu", "x86_64", "dedicated", 1, "nvidia-l40s", 48.0),
+    "L40S-2-96G": (24, 192.0, "gpu", "x86_64", "dedicated", 2, "nvidia-l40s", 96.0),
     # AMP2 — ARM dedicated
-    "AMP2-C1":  (1,  4.0,  "general-purpose", "arm64", "dedicated", None, None, None),
-    "AMP2-C2":  (2,  8.0,  "general-purpose", "arm64", "dedicated", None, None, None),
-    "AMP2-C4":  (4,  16.0, "general-purpose", "arm64", "dedicated", None, None, None),
-    "AMP2-C8":  (8,  32.0, "general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C1": (1, 4.0, "general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C2": (2, 8.0, "general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C4": (4, 16.0, "general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C8": (8, 32.0, "general-purpose", "arm64", "dedicated", None, None, None),
     "AMP2-C12": (12, 48.0, "general-purpose", "arm64", "dedicated", None, None, None),
     "AMP2-C24": (24, 96.0, "general-purpose", "arm64", "dedicated", None, None, None),
-    "AMP2-C48": (48, 192.0,"general-purpose", "arm64", "dedicated", None, None, None),
-    "AMP2-C60": (60, 240.0,"general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C48": (48, 192.0, "general-purpose", "arm64", "dedicated", None, None, None),
+    "AMP2-C60": (60, 240.0, "general-purpose", "arm64", "dedicated", None, None, None),
 }
 
 
 def _infer_family(commercial_type: str) -> str:
     """Infer instance family from commercial type name using common taxonomy."""
     type_lower = commercial_type.lower()
-    if "gpu" in type_lower or type_lower.startswith("h100") or type_lower.startswith("l40") or type_lower.startswith("a100"):
+    if (
+        "gpu" in type_lower
+        or type_lower.startswith("h100")
+        or type_lower.startswith("l40")
+        or type_lower.startswith("a100")
+    ):
         return "gpu"
     elif type_lower.startswith("dev") or type_lower.startswith("stardust"):
         return "general-purpose"
-    elif type_lower.startswith("gp") or type_lower.startswith("pop2") and "-hm-" not in type_lower and "-hc-" not in type_lower:
+    elif (
+        type_lower.startswith("gp")
+        or type_lower.startswith("pop2")
+        and "-hm-" not in type_lower
+        and "-hc-" not in type_lower
+    ):
         return "general-purpose"
     elif type_lower.startswith("pro") or "-hc-" in type_lower:
         return "compute-optimized"
@@ -225,9 +241,15 @@ def _normalize_zone(raw: str) -> str:
     """Convert catalog zone codes (e.g. frpar1, nlams1) to standard format (fr-par-1)."""
     raw = raw.lower().replace("_", "")
     zone_map = {
-        "frpar1": "fr-par-1", "frpar2": "fr-par-2", "frpar3": "fr-par-3",
-        "nlams1": "nl-ams-1", "nlams2": "nl-ams-2", "nlams3": "nl-ams-3",
-        "plwaw1": "pl-waw-1", "plwaw2": "pl-waw-2", "plwaw3": "pl-waw-3",
+        "frpar1": "fr-par-1",
+        "frpar2": "fr-par-2",
+        "frpar3": "fr-par-3",
+        "nlams1": "nl-ams-1",
+        "nlams2": "nl-ams-2",
+        "nlams3": "nl-ams-3",
+        "plwaw1": "pl-waw-1",
+        "plwaw2": "pl-waw-2",
+        "plwaw3": "pl-waw-3",
     }
     return zone_map.get(raw, raw)
 

@@ -66,7 +66,9 @@ async def list_regions(
         pq.filter(Region.carbon_intensity_g_co2_kwh <= max_carbon_intensity)
 
     return await pq.execute(
-        db, limit=limit, offset=offset,
+        db,
+        limit=limit,
+        offset=offset,
         order_by=(Region.provider_id, Region.slug),
     )
 
@@ -89,10 +91,7 @@ async def get_region_sustainability(
     Also returns the DB-stored batch-ingested values for comparison.
     """
     ref = parse_id_or_slug(region_id)
-    stmt = (
-        select(Region, Provider.slug.label("provider_slug"))
-        .join(Provider, Region.provider_id == Provider.id)
-    )
+    stmt = select(Region, Provider.slug.label("provider_slug")).join(Provider, Region.provider_id == Provider.id)
     if isinstance(ref, int):
         stmt = stmt.where(Region.id == ref)
     else:

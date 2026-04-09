@@ -51,7 +51,12 @@ async def _fetch_locations(token: str) -> list[dict]:
         except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as e:
             last_err = e
             if attempt < HETZNER_FETCH_RETRIES:
-                logger.warning("Hetzner locations fetch attempt %s/%s failed: %s, retrying in 5s...", attempt, HETZNER_FETCH_RETRIES, e)
+                logger.warning(
+                    "Hetzner locations fetch attempt %s/%s failed: %s, retrying in 5s...",
+                    attempt,
+                    HETZNER_FETCH_RETRIES,
+                    e,
+                )
                 await asyncio.sleep(5)
     raise last_err
 
@@ -72,7 +77,12 @@ async def _fetch_server_types(token: str) -> list[dict]:
         except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout) as e:
             last_err = e
             if attempt < HETZNER_FETCH_RETRIES:
-                logger.warning("Hetzner server_types fetch attempt %s/%s failed: %s, retrying in 5s...", attempt, HETZNER_FETCH_RETRIES, e)
+                logger.warning(
+                    "Hetzner server_types fetch attempt %s/%s failed: %s, retrying in 5s...",
+                    attempt,
+                    HETZNER_FETCH_RETRIES,
+                    e,
+                )
                 await asyncio.sleep(5)
     raise last_err
 
@@ -109,6 +119,7 @@ async def ingest(
     purchase_model: str = "on_demand",
 ) -> None:
     from app.core.config import settings
+
     token = settings.hetzner_api_token
     if not token:
         raise RuntimeError("hetzner_api_token is required for Hetzner ingestion (set via env var or secret file)")
@@ -221,7 +232,7 @@ async def ingest(
         canonical = pick_one_per_logical_product(
             candidates,
             group_key=lambda c: (name, c["location"]),
-            sort_key=lambda c: (c["price"] or 0),
+            sort_key=lambda c: c["price"] or 0,
         )
         for c in canonical:
             region = region_by_slug[c["location"]]

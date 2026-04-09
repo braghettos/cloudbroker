@@ -21,6 +21,7 @@ logger = get_logger(__name__)
 
 RELTOL = 0.001  # Config should match exactly (tiny tolerance for float)
 
+
 # (slug, module_path, flavors_attr, regions_attr, price_extractor)
 # price_extractor(spec) -> expected eur_per_hour or None to skip
 def _contabo_price(spec: tuple) -> float | None:
@@ -60,6 +61,7 @@ class VerificationResult:
 
 def _get_config(module_path: str, attr: str) -> dict | list | None:
     import importlib
+
     try:
         mod = importlib.import_module(module_path)
         return getattr(mod, attr, None)
@@ -80,7 +82,7 @@ async def verify_ingested_prices(
 
     for slug, module_path, flavors_attr, regions_attr, price_extractor in CONFIG_PROVIDERS:
         flavors = _get_config(module_path, flavors_attr)
-        regions_cfg = _get_config(module_path, regions_attr)
+        _get_config(module_path, regions_attr)  # validate regions exist
         if not flavors or not isinstance(flavors, dict):
             results.append(VerificationResult(passed=True, message=f"{slug}: no FLAVORS config (skipping)"))
             continue
@@ -110,12 +112,35 @@ async def verify_ingested_prices(
                 continue
             if expected is None:
                 continue
-            it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == name).limit(1))).scalars().first()
+            it = (
+                (
+                    await db.execute(
+                        select(InstanceType)
+                        .where(InstanceType.provider_id == provider.id)
+                        .where(InstanceType.name == name)
+                        .limit(1)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             if not it:
                 mismatches.append({"name": name, "reason": "instance type not in DB", "expected": expected})
                 checked += 1
                 continue
-            price_row = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+            price_row = (
+                (
+                    await db.execute(
+                        select(Price)
+                        .where(Price.instance_type_id == it.id)
+                        .where(Price.region_id == region.id)
+                        .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                        .limit(1)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             if not price_row:
                 mismatches.append({"name": name, "reason": "no price in DB", "expected": expected})
                 checked += 1
@@ -123,11 +148,15 @@ async def verify_ingested_prices(
             stored = price_row.price_eur_per_hour or price_row.price_per_hour
             diff = abs(stored - expected) / expected if expected > 0 else 0
             if diff > RELTOL:
-                mismatches.append({"name": name, "expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)})
+                mismatches.append(
+                    {"name": name, "expected": expected, "stored": stored, "diff_pct": round(diff * 100, 2)}
+                )
             checked += 1
 
         if mismatches:
-            results.append(VerificationResult(passed=False, message=f"{slug}: config mismatch", details={"mismatches": mismatches}))
+            results.append(
+                VerificationResult(passed=False, message=f"{slug}: config mismatch", details={"mismatches": mismatches})
+            )
         elif checked > 0:
             results.append(VerificationResult(passed=True, message=f"{slug}: OK ({checked} flavors verified)"))
         else:

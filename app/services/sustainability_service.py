@@ -35,41 +35,43 @@ EIA_API_BASE = "https://api.eia.gov/v2"
 # ENTSO-E psrType → direct emission factor (gCO2eq/kWh, IPCC AR6 lifecycle values)
 # Renewable/low-carbon sources: 0 for scoring (we use renewable_pct separately)
 ENTSOE_EMISSION_FACTORS: dict[str, float] = {
-    "B01": 230,    # Biomass (lifecycle, varies widely but median ~230 gCO2/kWh)
-    "B02": 820,    # Fossil Brown coal/Lignite
-    "B03": 440,    # Fossil Coal-derived gas
-    "B04": 410,    # Fossil Gas (combined cycle CCGT)
-    "B05": 820,    # Fossil Hard coal
-    "B06": 650,    # Fossil Oil
-    "B07": 800,    # Fossil Oil shale
-    "B08": 380,    # Fossil Peat
-    "B09": 38,     # Geothermal
-    "B10": 24,     # Hydro Pumped Storage (lifecycle incl. upstream)
-    "B11": 4,      # Hydro Run-of-river
-    "B12": 4,      # Hydro Water Reservoir
-    "B13": 8,      # Marine
-    "B14": 12,     # Nuclear
-    "B15": 25,     # Other renewable
-    "B16": 5,      # Solar (lifecycle)
-    "B17": 330,    # Waste (mixed, partially biogenic)
-    "B18": 12,     # Wind Offshore (lifecycle)
-    "B19": 11,     # Wind Onshore (lifecycle)
-    "B20": 400,    # Other (unknown → assume fossil mix average)
+    "B01": 230,  # Biomass (lifecycle, varies widely but median ~230 gCO2/kWh)
+    "B02": 820,  # Fossil Brown coal/Lignite
+    "B03": 440,  # Fossil Coal-derived gas
+    "B04": 410,  # Fossil Gas (combined cycle CCGT)
+    "B05": 820,  # Fossil Hard coal
+    "B06": 650,  # Fossil Oil
+    "B07": 800,  # Fossil Oil shale
+    "B08": 380,  # Fossil Peat
+    "B09": 38,  # Geothermal
+    "B10": 24,  # Hydro Pumped Storage (lifecycle incl. upstream)
+    "B11": 4,  # Hydro Run-of-river
+    "B12": 4,  # Hydro Water Reservoir
+    "B13": 8,  # Marine
+    "B14": 12,  # Nuclear
+    "B15": 25,  # Other renewable
+    "B16": 5,  # Solar (lifecycle)
+    "B17": 330,  # Waste (mixed, partially biogenic)
+    "B18": 12,  # Wind Offshore (lifecycle)
+    "B19": 11,  # Wind Onshore (lifecycle)
+    "B20": 400,  # Other (unknown → assume fossil mix average)
 }
 
 # psrTypes that count as renewable for renewable_pct calculation
-ENTSOE_RENEWABLE_PSRTYPES = frozenset({
-    "B01",  # Biomass
-    "B09",  # Geothermal
-    "B10",  # Hydro Pumped Storage
-    "B11",  # Hydro Run-of-river
-    "B12",  # Hydro Water Reservoir
-    "B13",  # Marine
-    "B15",  # Other renewable
-    "B16",  # Solar
-    "B18",  # Wind Offshore
-    "B19",  # Wind Onshore
-})
+ENTSOE_RENEWABLE_PSRTYPES = frozenset(
+    {
+        "B01",  # Biomass
+        "B09",  # Geothermal
+        "B10",  # Hydro Pumped Storage
+        "B11",  # Hydro Run-of-river
+        "B12",  # Hydro Water Reservoir
+        "B13",  # Marine
+        "B15",  # Other renewable
+        "B16",  # Solar
+        "B18",  # Wind Offshore
+        "B19",  # Wind Onshore
+    }
+)
 
 # Low-carbon psrTypes (renewable + nuclear) — used for broader "clean energy" metric
 ENTSOE_LOW_CARBON_PSRTYPES = ENTSOE_RENEWABLE_PSRTYPES | frozenset({"B14"})
@@ -82,57 +84,57 @@ ENTSOE_LOW_CARBON_PSRTYPES = ENTSOE_RENEWABLE_PSRTYPES | frozenset({"B14"})
 # ---------------------------------------------------------------------------
 COUNTRY_STATIC_INTENSITY: dict[str, tuple[float, float]] = {
     # Europe (EU / EEA — fallback when ENTSO-E zone is not mapped)
-    "AT": (126, 0.82),   # Austria
-    "BE": (148, 0.43),   # Belgium
-    "BG": (395, 0.29),   # Bulgaria
-    "CH": (32, 0.72),    # Switzerland (nuclear + hydro)
-    "CY": (570, 0.22),   # Cyprus
-    "CZ": (385, 0.26),   # Czechia
-    "DE": (335, 0.59),   # Germany
-    "DK": (135, 0.84),   # Denmark
-    "EE": (283, 0.42),   # Estonia
-    "ES": (170, 0.60),   # Spain
-    "FI": (87,  0.73),   # Finland
-    "FR": (56,  0.82),   # France (nuclear)
-    "GB": (215, 0.50),   # United Kingdom
-    "GR": (295, 0.47),   # Greece
-    "HR": (160, 0.56),   # Croatia
-    "HU": (222, 0.47),   # Hungary
-    "IE": (283, 0.42),   # Ireland
-    "IT": (328, 0.44),   # Italy
-    "LT": (180, 0.63),   # Lithuania
-    "LU": (97,  0.62),   # Luxembourg
-    "LV": (130, 0.64),   # Latvia
-    "MT": (510, 0.12),   # Malta
-    "NL": (263, 0.43),   # Netherlands
-    "NO": (26,  0.98),   # Norway (almost all hydro)
-    "PL": (641, 0.26),   # Poland
-    "PT": (120, 0.73),   # Portugal
-    "RO": (263, 0.44),   # Romania
-    "SE": (41,  0.82),   # Sweden (hydro + nuclear)
-    "SI": (220, 0.45),   # Slovenia
-    "SK": (140, 0.55),   # Slovakia
+    "AT": (126, 0.82),  # Austria
+    "BE": (148, 0.43),  # Belgium
+    "BG": (395, 0.29),  # Bulgaria
+    "CH": (32, 0.72),  # Switzerland (nuclear + hydro)
+    "CY": (570, 0.22),  # Cyprus
+    "CZ": (385, 0.26),  # Czechia
+    "DE": (335, 0.59),  # Germany
+    "DK": (135, 0.84),  # Denmark
+    "EE": (283, 0.42),  # Estonia
+    "ES": (170, 0.60),  # Spain
+    "FI": (87, 0.73),  # Finland
+    "FR": (56, 0.82),  # France (nuclear)
+    "GB": (215, 0.50),  # United Kingdom
+    "GR": (295, 0.47),  # Greece
+    "HR": (160, 0.56),  # Croatia
+    "HU": (222, 0.47),  # Hungary
+    "IE": (283, 0.42),  # Ireland
+    "IT": (328, 0.44),  # Italy
+    "LT": (180, 0.63),  # Lithuania
+    "LU": (97, 0.62),  # Luxembourg
+    "LV": (130, 0.64),  # Latvia
+    "MT": (510, 0.12),  # Malta
+    "NL": (263, 0.43),  # Netherlands
+    "NO": (26, 0.98),  # Norway (almost all hydro)
+    "PL": (641, 0.26),  # Poland
+    "PT": (120, 0.73),  # Portugal
+    "RO": (263, 0.44),  # Romania
+    "SE": (41, 0.82),  # Sweden (hydro + nuclear)
+    "SI": (220, 0.45),  # Slovenia
+    "SK": (140, 0.55),  # Slovakia
     # Non-EU
-    "US": (386, 0.24),   # United States (national average; EIA 2024)
-    "CA": (130, 0.67),   # Canada
-    "AU": (455, 0.33),   # Australia
-    "JP": (458, 0.23),   # Japan
-    "SG": (368, 0.04),   # Singapore
-    "KR": (415, 0.09),   # South Korea
-    "IN": (680, 0.23),   # India
-    "BR": (95,  0.86),   # Brazil
-    "ZA": (760, 0.09),   # South Africa
-    "HK": (680, 0.04),   # Hong Kong
-    "TW": (545, 0.08),   # Taiwan
-    "ID": (760, 0.14),   # Indonesia
-    "TH": (480, 0.17),   # Thailand
-    "IL": (510, 0.10),   # Israel
-    "AE": (552, 0.06),   # UAE
-    "SA": (696, 0.02),   # Saudi Arabia
-    "NZ": (120, 0.84),   # New Zealand
-    "MX": (420, 0.25),   # Mexico
-    "AR": (340, 0.35),   # Argentina
-    "CL": (275, 0.53),   # Chile
+    "US": (386, 0.24),  # United States (national average; EIA 2024)
+    "CA": (130, 0.67),  # Canada
+    "AU": (455, 0.33),  # Australia
+    "JP": (458, 0.23),  # Japan
+    "SG": (368, 0.04),  # Singapore
+    "KR": (415, 0.09),  # South Korea
+    "IN": (680, 0.23),  # India
+    "BR": (95, 0.86),  # Brazil
+    "ZA": (760, 0.09),  # South Africa
+    "HK": (680, 0.04),  # Hong Kong
+    "TW": (545, 0.08),  # Taiwan
+    "ID": (760, 0.14),  # Indonesia
+    "TH": (480, 0.17),  # Thailand
+    "IL": (510, 0.10),  # Israel
+    "AE": (552, 0.06),  # UAE
+    "SA": (696, 0.02),  # Saudi Arabia
+    "NZ": (120, 0.84),  # New Zealand
+    "MX": (420, 0.25),  # Mexico
+    "AR": (340, 0.35),  # Argentina
+    "CL": (275, 0.53),  # Chile
 }
 
 # Map country code → EIA region/subregion for real-time lookup
@@ -142,13 +144,13 @@ COUNTRY_STATIC_INTENSITY: dict[str, tuple[float, float]] = {
 # We store representative EIA respondent codes per AWS/Azure/DO region slug
 EIA_REGION_MAP: dict[str, str] = {
     # AWS
-    "us-east-1": "PJM",       # N. Virginia → PJM grid
-    "us-east-2": "MISO",      # Ohio → MISO grid
-    "us-west-1": "CISO",      # N. California → CAISO
-    "us-west-2": "NWPP",      # Oregon → Northwest Power Pool
-    "ca-central-1": "",        # Canada — no EIA data
-    "ap-northeast-1": "",      # Tokyo — no EIA
-    "ap-southeast-1": "",      # Singapore — no EIA
+    "us-east-1": "PJM",  # N. Virginia → PJM grid
+    "us-east-2": "MISO",  # Ohio → MISO grid
+    "us-west-1": "CISO",  # N. California → CAISO
+    "us-west-2": "NWPP",  # Oregon → Northwest Power Pool
+    "ca-central-1": "",  # Canada — no EIA data
+    "ap-northeast-1": "",  # Tokyo — no EIA
+    "ap-southeast-1": "",  # Singapore — no EIA
     # Azure
     "eastus": "PJM",
     "eastus2": "PJM",
@@ -165,16 +167,16 @@ EIA_REGION_MAP: dict[str, str] = {
 
 # EIA generation type codes → emission factor (gCO2/kWh, EPA eGRID lifecycle)
 EIA_FUEL_EMISSION_FACTORS: dict[str, float] = {
-    "COL": 1001,   # Coal
-    "NG":  440,    # Natural gas (CCGT)
-    "OIL": 650,    # Oil/petroleum
-    "NUC": 12,     # Nuclear
-    "WAT": 4,      # Hydro
-    "WND": 11,     # Wind
-    "SUN": 5,      # Solar
-    "GEO": 38,     # Geothermal
-    "BIO": 230,    # Biomass/biofuel
-    "OTH": 400,    # Other
+    "COL": 1001,  # Coal
+    "NG": 440,  # Natural gas (CCGT)
+    "OIL": 650,  # Oil/petroleum
+    "NUC": 12,  # Nuclear
+    "WAT": 4,  # Hydro
+    "WND": 11,  # Wind
+    "SUN": 5,  # Solar
+    "GEO": 38,  # Geothermal
+    "BIO": 230,  # Biomass/biofuel
+    "OTH": 400,  # Other
 }
 EIA_RENEWABLE_FUELS = frozenset({"WAT", "WND", "SUN", "GEO", "BIO"})
 
@@ -182,6 +184,7 @@ EIA_RENEWABLE_FUELS = frozenset({"WAT", "WND", "SUN", "GEO", "BIO"})
 # ---------------------------------------------------------------------------
 # Bounded TTL cache (asyncio-safe)
 # ---------------------------------------------------------------------------
+
 
 class _TTLCache:
     """Bounded TTL dict protected by asyncio.Lock.
@@ -226,8 +229,8 @@ class SustainabilityData:
     """Current sustainability metrics for a region."""
 
     carbon_intensity_g_co2_kwh: float
-    renewable_energy_pct: float   # 0-1
-    source: str = "unknown"       # "entsoe", "uk_api", "eia", "static", "config", "db"
+    renewable_energy_pct: float  # 0-1
+    source: str = "unknown"  # "entsoe", "uk_api", "eia", "static", "config", "db"
 
 
 # Module-level cache instance (one per process; safe for async workers)
@@ -300,6 +303,7 @@ def _get_entsoe_area(cfg: dict, provider_slug: str, region_slug: str) -> str | N
 # ENTSO-E (EU grid — free, token required)
 # ---------------------------------------------------------------------------
 
+
 async def _fetch_from_entsoe(token: str, area_code: str) -> SustainabilityData | None:
     """Fetch actual generation from ENTSO-E A75, compute carbon intensity and renewable %."""
     now = datetime.now(timezone.utc)
@@ -340,9 +344,7 @@ async def _fetch_from_entsoe(token: str, area_code: str) -> SustainabilityData |
         psr_elem = next((c for c in ts if local(c.tag) == "MktPSRType"), None)
         if psr_elem is None:
             continue
-        psr_type = next(
-            ((c.text or "").strip() for c in psr_elem if local(c.tag) == "psrType"), None
-        )
+        psr_type = next(((c.text or "").strip() for c in psr_elem if local(c.tag) == "psrType"), None)
         if not psr_type:
             continue
         for period in ts.iter():
@@ -373,10 +375,7 @@ async def _fetch_from_entsoe(token: str, area_code: str) -> SustainabilityData |
     if not series_data or max_position < 1:
         return None
 
-    latest_points = [
-        (psr, pos_map.get(max_position, 0.0))
-        for psr, pos_map in series_data
-    ]
+    latest_points = [(psr, pos_map.get(max_position, 0.0)) for psr, pos_map in series_data]
     latest_points = [(psr, q) for psr, q in latest_points if q > 0]
     if not latest_points:
         return None
@@ -401,15 +400,18 @@ async def _fetch_from_entsoe(token: str, area_code: str) -> SustainabilityData |
 # ---------------------------------------------------------------------------
 
 # UK regions that should use this API
-_UK_REGION_SLUGS = frozenset({
-    # AWS
-    "eu-west-2",
-    # Azure
-    "uksouth", "ukwest",
-    # DigitalOcean
-    "lon1",
-    # Hetzner (no UK DC but slug guard)
-})
+_UK_REGION_SLUGS = frozenset(
+    {
+        # AWS
+        "eu-west-2",
+        # Azure
+        "uksouth",
+        "ukwest",
+        # DigitalOcean
+        "lon1",
+        # Hetzner (no UK DC but slug guard)
+    }
+)
 
 
 async def _fetch_from_uk_carbon_api() -> SustainabilityData | None:
@@ -447,14 +449,8 @@ async def _fetch_from_uk_carbon_api() -> SustainabilityData | None:
         if total_pct <= 0:
             return None
 
-        carbon_sum = sum(
-            item.get("perc", 0) * fuel_factors.get(item.get("fuel", "other"), 400)
-            for item in gen_mix
-        )
-        renewable_pct = sum(
-            item.get("perc", 0) for item in gen_mix
-            if item.get("fuel") in renewable_fuels
-        ) / total_pct
+        carbon_sum = sum(item.get("perc", 0) * fuel_factors.get(item.get("fuel", "other"), 400) for item in gen_mix)
+        renewable_pct = sum(item.get("perc", 0) for item in gen_mix if item.get("fuel") in renewable_fuels) / total_pct
 
         # UK Carbon Intensity API also provides a direct intensity value in gCO2/kWh
         intensity_resp = await _fetch_uk_intensity_direct()
@@ -494,6 +490,7 @@ async def _fetch_uk_intensity_direct() -> float | None:
 # EIA OpenData API (US grid — free, API key required)
 # https://www.eia.gov/opendata/ — register for free API key
 # ---------------------------------------------------------------------------
+
 
 async def _fetch_from_eia(api_key: str, eia_respondent: str) -> SustainabilityData | None:
     """Fetch current fuel mix from EIA v2 API for a US grid region.
@@ -542,11 +539,7 @@ async def _fetch_from_eia(api_key: str, eia_respondent: str) -> SustainabilityDa
             float(r.get("value") or 0) * EIA_FUEL_EMISSION_FACTORS.get(r.get("fueltype", "OTH"), 400)
             for r in latest_rows
         )
-        renewable_mwh = sum(
-            float(r.get("value") or 0)
-            for r in latest_rows
-            if r.get("fueltype") in EIA_RENEWABLE_FUELS
-        )
+        renewable_mwh = sum(float(r.get("value") or 0) for r in latest_rows if r.get("fueltype") in EIA_RENEWABLE_FUELS)
 
         return SustainabilityData(
             carbon_intensity_g_co2_kwh=carbon_sum / total_mwh,
@@ -561,6 +554,7 @@ async def _fetch_from_eia(api_key: str, eia_respondent: str) -> SustainabilityDa
 # ---------------------------------------------------------------------------
 # Static country-level fallback (Ember Climate data, no network call)
 # ---------------------------------------------------------------------------
+
 
 def _get_country_static(country_code: str | None) -> SustainabilityData | None:
     """Return Ember Climate yearly average for a country. No network call."""
@@ -584,40 +578,79 @@ def _get_country_static(country_code: str | None) -> SustainabilityData | None:
 # (supplements DB lookup; used when DB is not available in the real-time path)
 _SLUG_COUNTRY_HINTS: dict[str, str] = {
     # US slugs
-    "us-east-1": "US", "us-east-2": "US", "us-west-1": "US", "us-west-2": "US",
-    "eastus": "US", "eastus2": "US", "westus": "US", "westus2": "US", "westus3": "US",
-    "centralus": "US", "northcentralus": "US", "southcentralus": "US",
-    "nyc1": "US", "nyc2": "US", "nyc3": "US", "sfo2": "US", "sfo3": "US",
+    "us-east-1": "US",
+    "us-east-2": "US",
+    "us-west-1": "US",
+    "us-west-2": "US",
+    "eastus": "US",
+    "eastus2": "US",
+    "westus": "US",
+    "westus2": "US",
+    "westus3": "US",
+    "centralus": "US",
+    "northcentralus": "US",
+    "southcentralus": "US",
+    "nyc1": "US",
+    "nyc2": "US",
+    "nyc3": "US",
+    "sfo2": "US",
+    "sfo3": "US",
     # Canada
-    "ca-central-1": "CA", "canadacentral": "CA", "canadaeast": "CA", "tor1": "CA",
+    "ca-central-1": "CA",
+    "canadacentral": "CA",
+    "canadaeast": "CA",
+    "tor1": "CA",
     # UK
-    "eu-west-2": "GB", "uksouth": "GB", "ukwest": "GB", "lon1": "GB",
+    "eu-west-2": "GB",
+    "uksouth": "GB",
+    "ukwest": "GB",
+    "lon1": "GB",
     # Japan
-    "ap-northeast-1": "JP", "japaneast": "JP", "japanwest": "JP",
+    "ap-northeast-1": "JP",
+    "japaneast": "JP",
+    "japanwest": "JP",
     # Singapore
-    "ap-southeast-1": "SG", "southeastasia": "SG", "sgp1": "SG",
+    "ap-southeast-1": "SG",
+    "southeastasia": "SG",
+    "sgp1": "SG",
     # Australia
-    "ap-southeast-2": "AU", "australiaeast": "AU", "australiasoutheast": "AU", "syd1": "AU",
+    "ap-southeast-2": "AU",
+    "australiaeast": "AU",
+    "australiasoutheast": "AU",
+    "syd1": "AU",
     # South Korea
-    "ap-northeast-2": "KR", "koreacentral": "KR", "koreasouth": "KR",
+    "ap-northeast-2": "KR",
+    "koreacentral": "KR",
+    "koreasouth": "KR",
     # India
-    "ap-south-1": "IN", "centralindia": "IN", "southindia": "IN", "westindia": "IN",
+    "ap-south-1": "IN",
+    "centralindia": "IN",
+    "southindia": "IN",
+    "westindia": "IN",
     # Brazil
-    "sa-east-1": "BR", "brazilsouth": "BR",
+    "sa-east-1": "BR",
+    "brazilsouth": "BR",
     # UAE
-    "me-central-1": "AE", "uaenorth": "AE", "uaecentral": "AE",
+    "me-central-1": "AE",
+    "uaenorth": "AE",
+    "uaecentral": "AE",
     # South Africa
-    "af-south-1": "ZA", "southafricanorth": "ZA",
+    "af-south-1": "ZA",
+    "southafricanorth": "ZA",
     # Switzerland
-    "eu-central-2": "CH", "switzerlandnorth": "CH", "switzerlandwest": "CH",
+    "eu-central-2": "CH",
+    "switzerlandnorth": "CH",
+    "switzerlandwest": "CH",
     # Israel
-    "il-central-1": "IL", "israelcentral": "IL",
+    "il-central-1": "IL",
+    "israelcentral": "IL",
     # Mexico
     "mx-central-1": "MX",
     # New Zealand
     "ap-southeast-4": "NZ",
     # Hetzner non-EU
-    "ash": "US", "hil": "US",
+    "ash": "US",
+    "hil": "US",
 }
 
 
@@ -629,6 +662,7 @@ def _infer_country_from_slug(region_slug: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 async def get_current_sustainability(
     provider_slug: str,

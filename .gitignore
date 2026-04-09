@@ -53,3 +53,4 @@ Thumbs.db
 
 # Secrets
 secrets/
+.helm-packages/

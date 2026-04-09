@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
-from connectors.scaleway import SCALEWAY_BASE, SCALEWAY_ZONES, ZONE_MAP, _price_per_hour_eur
+from connectors.scaleway import SCALEWAY_BASE, ZONE_MAP, _price_per_hour_eur
 
 logger = get_logger(__name__)
 
@@ -82,7 +82,15 @@ async def verify_ingested_prices(
 
     zone_info = ZONE_MAP.get(SAMPLE_ZONE, {})
     region_slug = zone_info.get("slug", SAMPLE_ZONE)
-    region = (await db.execute(select(Region).where(Region.provider_id == provider.id).where(Region.slug == region_slug).limit(1))).scalars().first()
+    region = (
+        (
+            await db.execute(
+                select(Region).where(Region.provider_id == provider.id).where(Region.slug == region_slug).limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
     if not region:
         region = (await db.execute(select(Region).where(Region.provider_id == provider.id).limit(1))).scalars().first()
     if not region:
@@ -93,18 +101,49 @@ async def verify_ingested_prices(
         if name not in api_prices:
             continue
         expected = api_prices[name]
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == name).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == name)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"Scaleway {name}: not in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"Scaleway {name}: not in DB", details={"expected": expected})
+            )
             continue
-        pr = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+        pr = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not pr:
-            results.append(VerificationResult(passed=False, message=f"Scaleway {name}: no price", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"Scaleway {name}: no price", details={"expected": expected})
+            )
             continue
         stored = pr.price_eur_per_hour or pr.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"Scaleway {name}: mismatch", details={"expected": expected, "stored": stored}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"Scaleway {name}: mismatch", details={"expected": expected, "stored": stored}
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"Scaleway {name}: OK ({stored:.4f} EUR/hr)"))
 

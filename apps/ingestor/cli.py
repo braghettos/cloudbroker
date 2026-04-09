@@ -31,7 +31,26 @@ def _parse() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="Ingest pricing from provider(s)")
     ing.add_argument(
         "--provider",
-        choices=["gcp", "hetzner", "aws", "azure", "digitalocean", "scaleway", "ovh", "aruba", "upcloud", "exoscale", "seeweb", "contabo", "gcore", "cherry_servers", "clouding", "ibm_cloud", "sustainability", "all"],
+        choices=[
+            "gcp",
+            "hetzner",
+            "aws",
+            "azure",
+            "digitalocean",
+            "scaleway",
+            "ovh",
+            "aruba",
+            "upcloud",
+            "exoscale",
+            "seeweb",
+            "contabo",
+            "gcore",
+            "cherry_servers",
+            "clouding",
+            "ibm_cloud",
+            "sustainability",
+            "all",
+        ],
         required=True,
         help="Provider to ingest",
     )

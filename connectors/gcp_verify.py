@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.models import InstanceType, Price, Provider, Region
+from app.models import InstanceType, Provider, Region
 from app.models.price import PurchaseModel
 from app.services.ingestion import pick_one_per_logical_product
 from connectors.gcp import (
@@ -105,21 +105,29 @@ async def verify_ingested_prices(
     region_by_slug = {r.slug: r for r in regions}
 
     cpu_it = (
-        await db.execute(
-            select(InstanceType)
-            .where(InstanceType.provider_id == provider.id)
-            .where(InstanceType.name == GCP_CPU_PSEUDO_NAME)
-            .limit(1)
+        (
+            await db.execute(
+                select(InstanceType)
+                .where(InstanceType.provider_id == provider.id)
+                .where(InstanceType.name == GCP_CPU_PSEUDO_NAME)
+                .limit(1)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     ram_it = (
-        await db.execute(
-            select(InstanceType)
-            .where(InstanceType.provider_id == provider.id)
-            .where(InstanceType.name == GCP_RAM_PSEUDO_NAME)
-            .limit(1)
+        (
+            await db.execute(
+                select(InstanceType)
+                .where(InstanceType.provider_id == provider.id)
+                .where(InstanceType.name == GCP_RAM_PSEUDO_NAME)
+                .limit(1)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
 
     if not cpu_it or not ram_it:
         results.append(VerificationResult(passed=False, message="GCP unit price instance types not found"))
@@ -241,13 +249,17 @@ async def verify_ingested_prices(
         low_prices: list[dict] = []
         for region in regions:
             machine_it = (
-                await db.execute(
-                    select(InstanceType)
-                    .where(InstanceType.provider_id == provider.id)
-                    .where(InstanceType.name == "e2-highcpu-2")
-                    .limit(1)
+                (
+                    await db.execute(
+                        select(InstanceType)
+                        .where(InstanceType.provider_id == provider.id)
+                        .where(InstanceType.name == "e2-highcpu-2")
+                        .limit(1)
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not machine_it:
                 continue
             price = await _get_latest_price(db, machine_it.id, region.id, purchase)
@@ -288,13 +300,17 @@ async def verify_ingested_prices(
             expected_machine_eur = (cpu_eur * e2_highcpu_2_spec.vcpu) + (ram_eur * e2_highcpu_2_spec.ram_gb)
 
             machine_it = (
-                await db.execute(
-                    select(InstanceType)
-                    .where(InstanceType.provider_id == provider.id)
-                    .where(InstanceType.name == "e2-highcpu-2")
-                    .limit(1)
+                (
+                    await db.execute(
+                        select(InstanceType)
+                        .where(InstanceType.provider_id == provider.id)
+                        .where(InstanceType.name == "e2-highcpu-2")
+                        .limit(1)
+                    )
                 )
-            ).scalars().first()
+                .scalars()
+                .first()
+            )
             if not machine_it:
                 continue
             stored_price = await _get_latest_price(db, machine_it.id, region.id, purchase)
@@ -323,11 +339,11 @@ async def verify_ingested_prices(
                 )
             )
         else:
-            results.append(VerificationResult(passed=True, message="e2-highcpu-2 matches recomputation from unit prices"))
+            results.append(
+                VerificationResult(passed=True, message="e2-highcpu-2 matches recomputation from unit prices")
+            )
 
     if fail_on_mismatch and any(not r.passed for r in results):
-        raise RuntimeError(
-            "GCP verification failed: " + "; ".join(r.message for r in results if not r.passed)
-        )
+        raise RuntimeError("GCP verification failed: " + "; ".join(r.message for r in results if not r.passed))
 
     return results

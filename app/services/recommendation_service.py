@@ -78,14 +78,10 @@ def _compute_scoring_weights(req: RecommendationRequest) -> dict:
     if use_multi_criteria:
         cost_w = req.cost_weight if req.cost_weight is not None else settings.recommendation_cost_weight
         perf_w = (
-            req.performance_weight
-            if req.performance_weight is not None
-            else settings.recommendation_performance_weight
+            req.performance_weight if req.performance_weight is not None else settings.recommendation_performance_weight
         )
         rel_w = (
-            req.reliability_weight
-            if req.reliability_weight is not None
-            else settings.recommendation_reliability_weight
+            req.reliability_weight if req.reliability_weight is not None else settings.recommendation_reliability_weight
         )
         total = cost_w + perf_w + rel_w
         if total <= 0:
@@ -188,30 +184,30 @@ def _score_candidates(
         if c.provider_slug in preferred_set:
             score *= preference_multiplier
 
-        sust_score = compute_sustainability_score(
-            c.carbon_intensity_g_co2_kwh, c.renewable_energy_pct, candidates
-        )
+        sust_score = compute_sustainability_score(c.carbon_intensity_g_co2_kwh, c.renewable_energy_pct, candidates)
         if sust_score is not None and use_sustainability:
             score *= 1.0 + settings.sustainability_boost_max * sust_score
 
         tco_data = candidate_tcos[i] if use_tco else None
-        scored.append((
-            score,
-            resource_fit,
-            normalized_price,
-            perf_score_out,
-            rel_score_out,
-            spot_avail_score,
-            interrupt_risk_score,
-            c,
-            tco_data[0] if tco_data else None,
-            tco_data[1] if tco_data else None,
-            tco_data[2] if tco_data else None,
-            tco_data[3] if tco_data else None,
-            tco_data[4] if tco_data else None,
-            tco_data[5] if tco_data else None,
-            sust_score,
-        ))
+        scored.append(
+            (
+                score,
+                resource_fit,
+                normalized_price,
+                perf_score_out,
+                rel_score_out,
+                spot_avail_score,
+                interrupt_risk_score,
+                c,
+                tco_data[0] if tco_data else None,
+                tco_data[1] if tco_data else None,
+                tco_data[2] if tco_data else None,
+                tco_data[3] if tco_data else None,
+                tco_data[4] if tco_data else None,
+                tco_data[5] if tco_data else None,
+                sust_score,
+            )
+        )
 
     scored.sort(key=lambda x: -x[0])
     return scored

@@ -92,6 +92,7 @@ async def ingest(
 ) -> None:
     """Ingest Seeweb Cloud Server plans and pricing into database."""
     from app.core.config import settings
+
     api_token = settings.seeweb_api_token
     username = settings.seeweb_username
     password = settings.seeweb_password

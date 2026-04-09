@@ -53,8 +53,11 @@ async def _fetch_plans(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch available plans from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
         resp = await fetch_with_retry(
-            client, "GET", f"{UPCLOUD_BASE}/plan",
-            headers=auth_headers, caller="upcloud",
+            client,
+            "GET",
+            f"{UPCLOUD_BASE}/plan",
+            headers=auth_headers,
+            caller="upcloud",
         )
     data = resp.json()
     plans_obj = data.get("plans") or {}
@@ -66,8 +69,11 @@ async def _fetch_zones(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch available zones from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
         resp = await fetch_with_retry(
-            client, "GET", f"{UPCLOUD_BASE}/zone",
-            headers=auth_headers, caller="upcloud",
+            client,
+            "GET",
+            f"{UPCLOUD_BASE}/zone",
+            headers=auth_headers,
+            caller="upcloud",
         )
     data = resp.json()
     zones_obj = data.get("zones") or {}
@@ -79,8 +85,11 @@ async def _fetch_prices(auth_headers: dict[str, str]) -> list[dict]:
     """Fetch pricing by zone from UpCloud API."""
     async with httpx.AsyncClient(timeout=UPCLOUD_TIMEOUT) as client:
         resp = await fetch_with_retry(
-            client, "GET", f"{UPCLOUD_BASE}/price",
-            headers=auth_headers, caller="upcloud",
+            client,
+            "GET",
+            f"{UPCLOUD_BASE}/price",
+            headers=auth_headers,
+            caller="upcloud",
         )
     data = resp.json()
     prices_obj = data.get("prices") or {}
@@ -103,6 +112,7 @@ def _get_auth_headers() -> dict[str, str]:
     Get auth headers: prefer UPCLOUD_API_TOKEN (Bearer), else UPCLOUD_USERNAME + UPCLOUD_PASSWORD (Basic).
     """
     from app.core.config import settings
+
     token = (settings.upcloud_api_token or "").strip()
     if token:
         return _auth_headers_from_token(token)

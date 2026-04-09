@@ -10,11 +10,9 @@ unavailable (e.g. no Azure credentials configured).
 from __future__ import annotations
 
 import asyncio
-import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -202,6 +200,7 @@ async def _load_sku_specs() -> dict[str, AzureSkuSpec]:
     back to heuristic spec derivation.
     """
     from app.core.config import settings as app_settings
+
     subscription_id = app_settings.azure_subscription_id or ""
     access_token = app_settings.azure_access_token or ""
 

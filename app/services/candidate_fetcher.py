@@ -188,9 +188,7 @@ async def fetch_candidates(db: AsyncSession, req: RecommendationRequest) -> list
             )
         )
 
-    stmt = stmt.where(
-        or_(InstanceType.is_available.is_(None), InstanceType.is_available.is_(True))
-    )
+    stmt = stmt.where(or_(InstanceType.is_available.is_(None), InstanceType.is_available.is_(True)))
 
     result = await db.execute(stmt)
     rows = result.all()

@@ -32,8 +32,7 @@ from app.services.sustainability_service import (
 logger = get_logger(__name__)
 
 GCP_REGION_CARBON_URL = (
-    "https://raw.githubusercontent.com/GoogleCloudPlatform/region-carbon-info"
-    "/main/data/yearly/2024.csv"
+    "https://raw.githubusercontent.com/GoogleCloudPlatform/region-carbon-info/main/data/yearly/2024.csv"
 )
 
 
@@ -52,9 +51,7 @@ async def ingest_sustainability(db: AsyncSession) -> None:
     try:
         with urlopen(GCP_REGION_CARBON_URL, timeout=30) as resp:
             reader = csv.DictReader(resp.read().decode().splitlines())
-            gcp_provider = (
-                await db.execute(select(Provider).where(Provider.slug == "gcp"))
-            ).scalar_one_or_none()
+            gcp_provider = (await db.execute(select(Provider).where(Provider.slug == "gcp"))).scalar_one_or_none()
             if gcp_provider:
                 count = 0
                 for row in reader:
@@ -85,9 +82,7 @@ async def ingest_sustainability(db: AsyncSession) -> None:
 
     # ── 2. YAML overrides (any provider, highest priority) ───────────────────
     for provider_slug, regions in overrides.items():
-        prov = (
-            await db.execute(select(Provider).where(Provider.slug == provider_slug))
-        ).scalar_one_or_none()
+        prov = (await db.execute(select(Provider).where(Provider.slug == provider_slug))).scalar_one_or_none()
         if not prov:
             continue
         for region_slug, data in (regions or {}).items():
@@ -155,9 +150,7 @@ async def ingest_sustainability(db: AsyncSession) -> None:
 
     # ── 4. Mark providers that publish carbon emissions ──────────────────────
     for slug in ("gcp", "aws", "azure", "upcloud"):
-        prov = (
-            await db.execute(select(Provider).where(Provider.slug == slug))
-        ).scalar_one_or_none()
+        prov = (await db.execute(select(Provider).where(Provider.slug == slug))).scalar_one_or_none()
         if prov:
             prov.publishes_carbon_emissions = True
     await db.flush()

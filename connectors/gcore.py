@@ -18,11 +18,16 @@ _EUR_PER_GB_RAM_HR: float = 0.0033
 
 # Standard vCPU/RAM combinations — Gcore bills per-resource per minute
 _STANDARD_CONFIGS: list[tuple[int, float]] = [
-    (1, 2), (1, 4),
-    (2, 4), (2, 8),
-    (4, 8), (4, 16),
-    (8, 16), (8, 32),
-    (16, 32), (16, 64),
+    (1, 2),
+    (1, 4),
+    (2, 4),
+    (2, 8),
+    (4, 8),
+    (4, 16),
+    (8, 16),
+    (8, 32),
+    (16, 32),
+    (16, 64),
 ]
 
 

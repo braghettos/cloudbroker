@@ -14,10 +14,7 @@ from app.core.logging import get_logger
 from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
 from connectors.aws import (
-    AWS_PRICING_REGION,
     AWS_REGIONS,
-    SERVICE_CODE_EC2,
-    _extract_ondemand_price_usd,
     _fetch_ec2_ondemand_for_location,
     _get_pricing_client,
 )
@@ -80,7 +77,15 @@ async def verify_ingested_prices(
         results.append(VerificationResult(passed=False, message="AWS provider not found"))
         return results
 
-    region = (await db.execute(select(Region).where(Region.provider_id == provider.id).where(Region.slug == SAMPLE_REGION).limit(1))).scalars().first()
+    region = (
+        (
+            await db.execute(
+                select(Region).where(Region.provider_id == provider.id).where(Region.slug == SAMPLE_REGION).limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
     if not region:
         results.append(VerificationResult(passed=False, message="AWS eu-west-1 region not found"))
         return results
@@ -89,18 +94,49 @@ async def verify_ingested_prices(
         if itype not in api_prices:
             continue
         expected = to_eur(api_prices[itype], rate_usd_eur)
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == itype).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == itype)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"AWS {itype}: not in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"AWS {itype}: not in DB", details={"expected": expected})
+            )
             continue
-        pr = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+        pr = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not pr:
-            results.append(VerificationResult(passed=False, message=f"AWS {itype}: no price", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"AWS {itype}: no price", details={"expected": expected})
+            )
             continue
         stored = pr.price_eur_per_hour or pr.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"AWS {itype}: mismatch", details={"expected": expected, "stored": stored}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"AWS {itype}: mismatch", details={"expected": expected, "stored": stored}
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"AWS {itype}: OK ({stored:.4f} EUR/hr)"))
 

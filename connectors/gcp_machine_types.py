@@ -152,55 +152,157 @@ def _build_machine_type_catalog_legacy() -> list[MachineTypeSpec]:
     c3_highmem_sizes = [4, 8, 22, 44, 88, 176]
     c3_highcpu_sizes = [4, 8, 22, 44, 88, 176]
     for size in c3_standard_sizes:
-        catalog.append(MachineTypeSpec(f"c3-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c3", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"c3-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c3", is_current_gen=True)
+        )
     for size in c3_highmem_sizes:
-        catalog.append(MachineTypeSpec(f"c3-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="c3", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"c3-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="c3", is_current_gen=True)
+        )
     for size in c3_highcpu_sizes:
-        catalog.append(MachineTypeSpec(f"c3-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="c3", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"c3-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="c3", is_current_gen=True)
+        )
 
     # C3D family: AMD EPYC Genoa (current gen)
     c3d_standard_sizes = [4, 8, 16, 30, 60, 90, 180, 360]
     for size in c3d_standard_sizes:
-        catalog.append(MachineTypeSpec(f"c3d-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c3d", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"c3d-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="c3d", is_current_gen=True)
+        )
 
     # N4 family: Intel Emerald Rapids (current gen)
     n4_standard_sizes = [2, 4, 8, 16, 32, 48, 64, 80]
     n4_highmem_sizes = [2, 4, 8, 16, 32, 48, 64, 80]
     n4_highcpu_sizes = [2, 4, 8, 16, 32, 48, 64, 80]
     for size in n4_standard_sizes:
-        catalog.append(MachineTypeSpec(f"n4-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="n4", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"n4-standard-{size}", vcpu=size, ram_gb=size * 4.0, family="n4", is_current_gen=True)
+        )
     for size in n4_highmem_sizes:
-        catalog.append(MachineTypeSpec(f"n4-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="n4", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"n4-highmem-{size}", vcpu=size, ram_gb=size * 8.0, family="n4", is_current_gen=True)
+        )
     for size in n4_highcpu_sizes:
-        catalog.append(MachineTypeSpec(f"n4-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="n4", is_current_gen=True))
+        catalog.append(
+            MachineTypeSpec(f"n4-highcpu-{size}", vcpu=size, ram_gb=size * 2.0, family="n4", is_current_gen=True)
+        )
 
     # A2 family: NVIDIA A100 GPUs
-    catalog.append(MachineTypeSpec("a2-highgpu-1g", vcpu=12, ram_gb=85.0, family="a2", gpu_count=1, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-highgpu-2g", vcpu=24, ram_gb=170.0, family="a2", gpu_count=2, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-highgpu-4g", vcpu=48, ram_gb=340.0, family="a2", gpu_count=4, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-highgpu-8g", vcpu=96, ram_gb=680.0, family="a2", gpu_count=8, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-megagpu-16g", vcpu=96, ram_gb=1360.0, family="a2", gpu_count=16, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-ultragpu-1g", vcpu=12, ram_gb=170.0, family="a2", gpu_count=1, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-ultragpu-2g", vcpu=24, ram_gb=340.0, family="a2", gpu_count=2, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-ultragpu-4g", vcpu=48, ram_gb=680.0, family="a2", gpu_count=4, gpu_model="nvidia-a100-80gb"))
-    catalog.append(MachineTypeSpec("a2-ultragpu-8g", vcpu=96, ram_gb=1360.0, family="a2", gpu_count=8, gpu_model="nvidia-a100-80gb"))
+    catalog.append(
+        MachineTypeSpec("a2-highgpu-1g", vcpu=12, ram_gb=85.0, family="a2", gpu_count=1, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec("a2-highgpu-2g", vcpu=24, ram_gb=170.0, family="a2", gpu_count=2, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec("a2-highgpu-4g", vcpu=48, ram_gb=340.0, family="a2", gpu_count=4, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec("a2-highgpu-8g", vcpu=96, ram_gb=680.0, family="a2", gpu_count=8, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a2-megagpu-16g", vcpu=96, ram_gb=1360.0, family="a2", gpu_count=16, gpu_model="nvidia-a100-80gb"
+        )
+    )
+    catalog.append(
+        MachineTypeSpec("a2-ultragpu-1g", vcpu=12, ram_gb=170.0, family="a2", gpu_count=1, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec("a2-ultragpu-2g", vcpu=24, ram_gb=340.0, family="a2", gpu_count=2, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec("a2-ultragpu-4g", vcpu=48, ram_gb=680.0, family="a2", gpu_count=4, gpu_model="nvidia-a100-80gb")
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a2-ultragpu-8g", vcpu=96, ram_gb=1360.0, family="a2", gpu_count=8, gpu_model="nvidia-a100-80gb"
+        )
+    )
 
     # A3 family: NVIDIA H100 GPUs (current gen)
-    catalog.append(MachineTypeSpec("a3-highgpu-1g", vcpu=26, ram_gb=234.0, family="a3", gpu_count=1, gpu_model="nvidia-h100-80gb", is_current_gen=True))
-    catalog.append(MachineTypeSpec("a3-highgpu-2g", vcpu=52, ram_gb=468.0, family="a3", gpu_count=2, gpu_model="nvidia-h100-80gb", is_current_gen=True))
-    catalog.append(MachineTypeSpec("a3-highgpu-4g", vcpu=104, ram_gb=936.0, family="a3", gpu_count=4, gpu_model="nvidia-h100-80gb", is_current_gen=True))
-    catalog.append(MachineTypeSpec("a3-highgpu-8g", vcpu=208, ram_gb=1872.0, family="a3", gpu_count=8, gpu_model="nvidia-h100-80gb", is_current_gen=True))
-    catalog.append(MachineTypeSpec("a3-megagpu-8g", vcpu=208, ram_gb=1872.0, family="a3", gpu_count=8, gpu_model="nvidia-h100-mega-80gb", is_current_gen=True))
+    catalog.append(
+        MachineTypeSpec(
+            "a3-highgpu-1g",
+            vcpu=26,
+            ram_gb=234.0,
+            family="a3",
+            gpu_count=1,
+            gpu_model="nvidia-h100-80gb",
+            is_current_gen=True,
+        )
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a3-highgpu-2g",
+            vcpu=52,
+            ram_gb=468.0,
+            family="a3",
+            gpu_count=2,
+            gpu_model="nvidia-h100-80gb",
+            is_current_gen=True,
+        )
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a3-highgpu-4g",
+            vcpu=104,
+            ram_gb=936.0,
+            family="a3",
+            gpu_count=4,
+            gpu_model="nvidia-h100-80gb",
+            is_current_gen=True,
+        )
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a3-highgpu-8g",
+            vcpu=208,
+            ram_gb=1872.0,
+            family="a3",
+            gpu_count=8,
+            gpu_model="nvidia-h100-80gb",
+            is_current_gen=True,
+        )
+    )
+    catalog.append(
+        MachineTypeSpec(
+            "a3-megagpu-8g",
+            vcpu=208,
+            ram_gb=1872.0,
+            family="a3",
+            gpu_count=8,
+            gpu_model="nvidia-h100-mega-80gb",
+            is_current_gen=True,
+        )
+    )
 
     # G2 family: NVIDIA L4 GPUs
-    catalog.append(MachineTypeSpec("g2-standard-4", vcpu=4, ram_gb=16.0, family="g2", gpu_count=1, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-8", vcpu=8, ram_gb=32.0, family="g2", gpu_count=1, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-12", vcpu=12, ram_gb=48.0, family="g2", gpu_count=1, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-16", vcpu=16, ram_gb=64.0, family="g2", gpu_count=1, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-24", vcpu=24, ram_gb=96.0, family="g2", gpu_count=2, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-32", vcpu=32, ram_gb=128.0, family="g2", gpu_count=1, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-48", vcpu=48, ram_gb=192.0, family="g2", gpu_count=4, gpu_model="nvidia-l4"))
-    catalog.append(MachineTypeSpec("g2-standard-96", vcpu=96, ram_gb=384.0, family="g2", gpu_count=8, gpu_model="nvidia-l4"))
+    catalog.append(
+        MachineTypeSpec("g2-standard-4", vcpu=4, ram_gb=16.0, family="g2", gpu_count=1, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-8", vcpu=8, ram_gb=32.0, family="g2", gpu_count=1, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-12", vcpu=12, ram_gb=48.0, family="g2", gpu_count=1, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-16", vcpu=16, ram_gb=64.0, family="g2", gpu_count=1, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-24", vcpu=24, ram_gb=96.0, family="g2", gpu_count=2, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-32", vcpu=32, ram_gb=128.0, family="g2", gpu_count=1, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-48", vcpu=48, ram_gb=192.0, family="g2", gpu_count=4, gpu_model="nvidia-l4")
+    )
+    catalog.append(
+        MachineTypeSpec("g2-standard-96", vcpu=96, ram_gb=384.0, family="g2", gpu_count=8, gpu_model="nvidia-l4")
+    )
 
     return catalog
 
@@ -219,8 +321,7 @@ def _fetch_compute_machine_types_sync(project_id: str, zone: str) -> list[Machin
         from google.cloud import compute_v1  # type: ignore[import]
     except ImportError as exc:
         raise RuntimeError(
-            "google-cloud-compute is not installed. "
-            "Install it with: pip install google-cloud-compute"
+            "google-cloud-compute is not installed. Install it with: pip install google-cloud-compute"
         ) from exc
 
     try:
@@ -250,16 +351,18 @@ def _fetch_compute_machine_types_sync(project_id: str, zone: str) -> list[Machin
                     if count > 0:
                         gpu_count = (gpu_count or 0) + count
                         gpu_model = model or gpu_model
-            specs.append(MachineTypeSpec(
-                name=name,
-                vcpu=vcpu,
-                ram_gb=ram_gb,
-                family=family,
-                arch=arch,
-                gpu_count=gpu_count,
-                gpu_model=gpu_model,
-                is_current_gen=family not in ("n1", "f1", "g1"),
-            ))
+            specs.append(
+                MachineTypeSpec(
+                    name=name,
+                    vcpu=vcpu,
+                    ram_gb=ram_gb,
+                    family=family,
+                    arch=arch,
+                    gpu_count=gpu_count,
+                    gpu_model=gpu_model,
+                    is_current_gen=family not in ("n1", "f1", "g1"),
+                )
+            )
         return specs
     except RuntimeError:
         raise
@@ -279,25 +382,45 @@ async def _load_live_machine_types(only_eu: bool) -> list[MachineTypeSpec]:
     Raises RuntimeError if credentials or GOOGLE_CLOUD_PROJECT are missing.
     """
     from app.core.config import settings as app_settings
+
     project_id = app_settings.google_cloud_project or os.environ.get("GCP_PROJECT_ID") or ""
     if not project_id:
         raise RuntimeError(
-            "google_cloud_project is required for GCP Compute Engine API "
-            "(set via env var or secret file)"
+            "google_cloud_project is required for GCP Compute Engine API (set via env var or secret file)"
         )
 
     eu_zones = [
-        "europe-west1-b", "europe-west2-a", "europe-west3-a",
-        "europe-west4-a", "europe-north1-a", "europe-west6-a",
-        "europe-west9-a", "europe-southwest1-a", "europe-central2-a",
+        "europe-west1-b",
+        "europe-west2-a",
+        "europe-west3-a",
+        "europe-west4-a",
+        "europe-north1-a",
+        "europe-west6-a",
+        "europe-west9-a",
+        "europe-southwest1-a",
+        "europe-central2-a",
     ]
     global_zones = eu_zones + [
-        "us-central1-a", "us-east1-b", "us-east4-a", "us-west1-a", "us-west2-a",
-        "us-west3-a", "us-west4-a", "northamerica-northeast1-a",
-        "southamerica-east1-a", "asia-east1-a", "asia-east2-a",
-        "asia-northeast1-a", "asia-northeast3-a", "asia-southeast1-a",
-        "asia-southeast2-a", "asia-south1-a", "australia-southeast1-a",
-        "me-west1-a", "me-central1-a", "africa-south1-a",
+        "us-central1-a",
+        "us-east1-b",
+        "us-east4-a",
+        "us-west1-a",
+        "us-west2-a",
+        "us-west3-a",
+        "us-west4-a",
+        "northamerica-northeast1-a",
+        "southamerica-east1-a",
+        "asia-east1-a",
+        "asia-east2-a",
+        "asia-northeast1-a",
+        "asia-northeast3-a",
+        "asia-southeast1-a",
+        "asia-southeast2-a",
+        "asia-south1-a",
+        "australia-southeast1-a",
+        "me-west1-a",
+        "me-central1-a",
+        "africa-south1-a",
     ]
     zones_to_check = eu_zones if only_eu else global_zones
 
@@ -305,9 +428,7 @@ async def _load_live_machine_types(only_eu: bool) -> list[MachineTypeSpec]:
     all_specs: dict[str, MachineTypeSpec] = {}
 
     for zone in zones_to_check:
-        zone_specs = await loop.run_in_executor(
-            None, lambda z=zone: _fetch_compute_machine_types_sync(project_id, z)
-        )
+        zone_specs = await loop.run_in_executor(None, lambda z=zone: _fetch_compute_machine_types_sync(project_id, z))
         for spec in zone_specs:
             if spec.name not in all_specs:
                 all_specs[spec.name] = spec

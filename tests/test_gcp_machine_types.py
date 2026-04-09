@@ -242,11 +242,7 @@ async def test_all_e2_machine_types_created():
         from sqlalchemy import select, delete
 
         for name, vcpu, ram_gb, family, arch in _E2_SPOT_CHECK:
-            stmt = (
-                select(InstanceType)
-                .where(InstanceType.provider_id == provider.id)
-                .where(InstanceType.name == name)
-            )
+            stmt = select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == name)
             result = await db.execute(stmt)
             instance_type = result.scalars().first()
             assert instance_type is not None, f"Machine type {name} not found"

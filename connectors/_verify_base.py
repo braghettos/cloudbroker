@@ -6,7 +6,7 @@ common tolerance constants. This module provides them in one place.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.logging import get_logger
@@ -78,7 +78,5 @@ def summarize_results(
     )
     if fail_on_mismatch and failed > 0:
         messages = [r.message for r in results if not r.passed]
-        raise RuntimeError(
-            f"{provider_slug} verification: {failed} mismatch(es): {'; '.join(messages[:5])}"
-        )
+        raise RuntimeError(f"{provider_slug} verification: {failed} mismatch(es): {'; '.join(messages[:5])}")
     return results

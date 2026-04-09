@@ -77,7 +77,15 @@ async def verify_ingested_prices(
         return results
 
     region_slug = "ams3" if only_eu else "nyc1"
-    region = (await db.execute(select(Region).where(Region.provider_id == provider.id).where(Region.slug == region_slug).limit(1))).scalars().first()
+    region = (
+        (
+            await db.execute(
+                select(Region).where(Region.provider_id == provider.id).where(Region.slug == region_slug).limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
     if not region:
         region = (await db.execute(select(Region).where(Region.provider_id == provider.id).limit(1))).scalars().first()
     if not region:
@@ -88,18 +96,49 @@ async def verify_ingested_prices(
         if slug not in api_prices:
             continue
         expected = api_prices[slug]
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == slug).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == slug)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"DO {slug}: not in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"DO {slug}: not in DB", details={"expected": expected})
+            )
             continue
-        pr = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+        pr = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not pr:
-            results.append(VerificationResult(passed=False, message=f"DO {slug}: no price", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"DO {slug}: no price", details={"expected": expected})
+            )
             continue
         stored = pr.price_eur_per_hour or pr.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"DO {slug}: mismatch", details={"expected": expected, "stored": stored}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"DO {slug}: mismatch", details={"expected": expected, "stored": stored}
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"DO {slug}: OK ({stored:.4f} EUR/hr)"))
 

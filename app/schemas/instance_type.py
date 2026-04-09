@@ -17,7 +17,9 @@ class InstanceTypeBase(BaseModel):
     gpu_memory_gb: float | None = Field(None, gt=0, description="Total GPU memory in GB")
     disk_gb: float | None = Field(None, ge=0, description="Included local/root disk in GB")
     disk_type: str | None = Field(None, max_length=32, description="Disk type: local_ssd, local_hdd, network")
-    network_performance: str | None = Field(None, max_length=64, description="Network performance tier (e.g. Up to 25 Gigabit)")
+    network_performance: str | None = Field(
+        None, max_length=64, description="Network performance tier (e.g. Up to 25 Gigabit)"
+    )
     cpu_type: str | None = Field(None, max_length=32, description="CPU sharing model: shared or dedicated")
     is_current_gen: bool | None = Field(None, description="Whether this is a current-generation instance type")
     transfer_tb: float | None = Field(None, ge=0, description="Included monthly data transfer in TB")

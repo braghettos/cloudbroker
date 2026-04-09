@@ -121,9 +121,12 @@ async def ingest(
 ) -> None:
     """Ingest DigitalOcean sizes and regions into database."""
     from app.core.config import settings
+
     token = settings.digitalocean_api_token
     if not token:
-        raise RuntimeError("digitalocean_api_token is required for DigitalOcean ingestion (set via env var or secret file)")
+        raise RuntimeError(
+            "digitalocean_api_token is required for DigitalOcean ingestion (set via env var or secret file)"
+        )
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:

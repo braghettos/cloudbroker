@@ -187,15 +187,19 @@ async def analyze_price_trends(
     if purchase_model:
         base_filter = (Price.timestamp >= since) & (Price.purchase_model == purchase_model)
 
-    inner = select(
-        Price.instance_type_id,
-        Price.region_id,
-        Price.purchase_model,
-        Price.price_eur_per_hour,
-        Price.timestamp,
-        first_rn,
-        last_rn,
-    ).where(base_filter).subquery()
+    inner = (
+        select(
+            Price.instance_type_id,
+            Price.region_id,
+            Price.purchase_model,
+            Price.price_eur_per_hour,
+            Price.timestamp,
+            first_rn,
+            last_rn,
+        )
+        .where(base_filter)
+        .subquery()
+    )
 
     count_sub = (
         select(

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
-from connectors.upcloud import _fetch_plans, _fetch_prices, _fetch_zones, _get_auth_headers
+from connectors.upcloud import _fetch_plans, _fetch_prices, _get_auth_headers
 
 logger = get_logger(__name__)
 
@@ -28,7 +28,10 @@ class VerificationResult:
 
 
 def _has_upcloud_creds() -> bool:
-    return bool(os.environ.get("UPCLOUD_API_TOKEN") or (os.environ.get("UPCLOUD_USERNAME") and os.environ.get("UPCLOUD_PASSWORD")))
+    return bool(
+        os.environ.get("UPCLOUD_API_TOKEN")
+        or (os.environ.get("UPCLOUD_USERNAME") and os.environ.get("UPCLOUD_PASSWORD"))
+    )
 
 
 async def verify_ingested_prices(
@@ -48,7 +51,7 @@ async def verify_ingested_prices(
 
     try:
         auth = _get_auth_headers()
-        plans = await _fetch_plans(auth)
+        await _fetch_plans(auth)  # validate API access
         prices = await _fetch_prices(auth)
     except Exception as e:
         results.append(VerificationResult(passed=False, message=f"UpCloud API failed: {e}"))
@@ -87,18 +90,49 @@ async def verify_ingested_prices(
         # UpCloud API returns price in 0.01 EUR units; connector divides by 100 for eur_per_hour
         raw = price_by_plan[plan]
         expected = raw / 100.0
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == plan).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == plan)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"UpCloud {plan}: not in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"UpCloud {plan}: not in DB", details={"expected": expected})
+            )
             continue
-        pr = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+        pr = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not pr:
-            results.append(VerificationResult(passed=False, message=f"UpCloud {plan}: no price", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"UpCloud {plan}: no price", details={"expected": expected})
+            )
             continue
         stored = pr.price_eur_per_hour or pr.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"UpCloud {plan}: mismatch", details={"expected": expected, "stored": stored}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"UpCloud {plan}: mismatch", details={"expected": expected, "stored": stored}
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"UpCloud {plan}: OK ({stored:.4f} EUR/hr)"))
 

@@ -73,17 +73,17 @@ _OVH_SPEC_RE = re.compile(r"^([a-z]+\d*)-(\d+)(?:-(\d+))?$", re.IGNORECASE)
 
 # Known vCPU/RAM mappings for OVH flavor prefixes (GB RAM -> vCPU ratio)
 _OVH_VCPU_RATIOS: dict[str, float] = {
-    "b2": 4.0,   # general-purpose: 1 vCPU per 4 GB RAM
+    "b2": 4.0,  # general-purpose: 1 vCPU per 4 GB RAM
     "b3": 4.0,
-    "c2": 2.0,   # compute-optimized: 1 vCPU per 2 GB RAM
+    "c2": 2.0,  # compute-optimized: 1 vCPU per 2 GB RAM
     "c3": 2.0,
-    "r2": 8.0,   # memory-optimized: 1 vCPU per 8 GB RAM
+    "r2": 8.0,  # memory-optimized: 1 vCPU per 8 GB RAM
     "r3": 8.0,
-    "d2": 4.0,   # general-purpose
-    "t1": 2.0,   # general-purpose small
+    "d2": 4.0,  # general-purpose
+    "t1": 2.0,  # general-purpose small
     "t2": 2.0,
-    "s1": 4.0,   # sandbox
-    "i1": 4.0,   # io-optimized
+    "s1": 4.0,  # sandbox
+    "i1": 4.0,  # io-optimized
 }
 
 
@@ -98,7 +98,6 @@ def _parse_flavor_specs(flavor_name: str) -> tuple[int, float]:
 
     # GPU flavors: g-1-1 means 1 GPU with 1 vCPU
     if prefix == "g":
-        gpu_count = number
         vcpu = int(match.group(3) or 1)
         # GPU instances typically have high RAM
         ram_gb = float(vcpu * 8)

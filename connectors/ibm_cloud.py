@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from decimal import Decimal
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -190,9 +188,7 @@ async def ingest(
 
     api_key = settings.ibmcloud_api_key
     if not api_key:
-        raise RuntimeError(
-            "ibmcloud_api_key is required for IBM Cloud ingestion (set via env var or secret file)"
-        )
+        raise RuntimeError("ibmcloud_api_key is required for IBM Cloud ingestion (set via env var or secret file)")
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:

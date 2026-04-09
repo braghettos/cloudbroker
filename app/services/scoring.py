@@ -31,9 +31,7 @@ def compute_reliability_score(provider_type: ProviderType) -> float:
         return 0.75
 
 
-def compute_performance_score(
-    vcpu: int, ram_gb: float, family: str | None, candidates: list[Candidate]
-) -> float:
+def compute_performance_score(vcpu: int, ram_gb: float, family: str | None, candidates: list[Candidate]) -> float:
     """Compute performance score based on instance specs relative to candidate set.
 
     Normalizes vCPU and RAM separately, then combines them. Higher vCPU/RAM = better.
@@ -80,8 +78,7 @@ def compute_spot_availability_score(
 
     size_score = min(
         1.0,
-        (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5
-        + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5,
+        (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5,
     )
     price_score = (price_per_hour - min_price) / price_range if price_range > 0 else 0.5
     provider_boost = 0.1 if provider_type == ProviderType.HYPERSCALER else 0.0
@@ -114,8 +111,7 @@ def compute_interruption_risk_score(
 
     size_risk = 1.0 - min(
         1.0,
-        (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5
-        + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5,
+        (vcpu / max_vcpu if max_vcpu > 0 else 0.5) * 0.5 + (ram_gb / max_ram if max_ram > 0 else 0.5) * 0.5,
     )
     price_risk = 1.0 - ((price_per_hour - min_price) / price_range if price_range > 0 else 0.5)
     provider_risk = 0.0 if provider_type == ProviderType.HYPERSCALER else 0.15

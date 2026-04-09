@@ -71,18 +71,49 @@ async def verify_ingested_prices(
         if name not in api_prices:
             continue
         expected = api_prices[name]
-        it = (await db.execute(select(InstanceType).where(InstanceType.provider_id == provider.id).where(InstanceType.name == name).limit(1))).scalars().first()
+        it = (
+            (
+                await db.execute(
+                    select(InstanceType)
+                    .where(InstanceType.provider_id == provider.id)
+                    .where(InstanceType.name == name)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not it:
-            results.append(VerificationResult(passed=False, message=f"Seeweb {name}: not in DB", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"Seeweb {name}: not in DB", details={"expected": expected})
+            )
             continue
-        pr = (await db.execute(select(Price).where(Price.instance_type_id == it.id).where(Price.region_id == region.id).where(Price.purchase_model == PurchaseModel.ON_DEMAND).limit(1))).scalars().first()
+        pr = (
+            (
+                await db.execute(
+                    select(Price)
+                    .where(Price.instance_type_id == it.id)
+                    .where(Price.region_id == region.id)
+                    .where(Price.purchase_model == PurchaseModel.ON_DEMAND)
+                    .limit(1)
+                )
+            )
+            .scalars()
+            .first()
+        )
         if not pr:
-            results.append(VerificationResult(passed=False, message=f"Seeweb {name}: no price", details={"expected": expected}))
+            results.append(
+                VerificationResult(passed=False, message=f"Seeweb {name}: no price", details={"expected": expected})
+            )
             continue
         stored = pr.price_eur_per_hour or pr.price_per_hour
         diff = abs(stored - expected) / expected if expected > 0 else 0
         if diff > RELTOL:
-            results.append(VerificationResult(passed=False, message=f"Seeweb {name}: mismatch", details={"expected": expected, "stored": stored}))
+            results.append(
+                VerificationResult(
+                    passed=False, message=f"Seeweb {name}: mismatch", details={"expected": expected, "stored": stored}
+                )
+            )
         else:
             results.append(VerificationResult(passed=True, message=f"Seeweb {name}: OK ({stored:.4f} EUR/hr)"))
 

@@ -11,9 +11,7 @@ class RegionBase(BaseModel):
     country: str | None = Field(None, max_length=2)
     is_eu: bool = False
     renewable_energy_pct: float | None = Field(None, ge=0, le=1, description="Renewable energy share 0-1")
-    carbon_intensity_g_co2_kwh: float | None = Field(
-        None, ge=0, description="Grid carbon intensity gCO2eq/kWh"
-    )
+    carbon_intensity_g_co2_kwh: float | None = Field(None, ge=0, description="Grid carbon intensity gCO2eq/kWh")
     publishes_carbon_data: bool = False
 
 

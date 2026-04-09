@@ -32,19 +32,19 @@ class ArubaConnector(BaseConfigConnector):
     # General Purpose: (vcpu, ram_gb, disk_gb, eur_per_hour, cpu_type, family)
     _PLANS: dict[str, tuple[int, float, float, float, str, str]] = {
         # General Purpose (1:2 vCPU:RAM ratio)
-        "CSO1A2":   (1,  2.0,   20.0, 0.012, "shared", "general-purpose"),
-        "CSO2A4":   (2,  4.0,   40.0, 0.024, "shared", "general-purpose"),
-        "CSO4A8":   (4,  8.0,   80.0, 0.046, "shared", "general-purpose"),
-        "CSO8A16":  (8,  16.0, 120.0, 0.089, "shared", "general-purpose"),
+        "CSO1A2": (1, 2.0, 20.0, 0.012, "shared", "general-purpose"),
+        "CSO2A4": (2, 4.0, 40.0, 0.024, "shared", "general-purpose"),
+        "CSO4A8": (4, 8.0, 80.0, 0.046, "shared", "general-purpose"),
+        "CSO8A16": (8, 16.0, 120.0, 0.089, "shared", "general-purpose"),
         "CSO12A24": (12, 24.0, 120.0, 0.134, "shared", "general-purpose"),
         "CSO16A32": (16, 32.0, 120.0, 0.184, "shared", "general-purpose"),
         "CSO24A48": (24, 48.0, 120.0, 0.274, "shared", "general-purpose"),
         "CSO32A64": (32, 64.0, 120.0, 0.374, "shared", "general-purpose"),
         # RAM Oriented (1:4 vCPU:RAM ratio)
-        "CSO1A4":   (1,  4.0,   40.0, 0.018, "shared", "memory-optimized"),
-        "CSO2A8":   (2,  8.0,   80.0, 0.036, "shared", "memory-optimized"),
-        "CSO4A16":  (4,  16.0, 120.0, 0.068, "shared", "memory-optimized"),
-        "CSO8A32":  (8,  32.0, 120.0, 0.129, "shared", "memory-optimized"),
+        "CSO1A4": (1, 4.0, 40.0, 0.018, "shared", "memory-optimized"),
+        "CSO2A8": (2, 8.0, 80.0, 0.036, "shared", "memory-optimized"),
+        "CSO4A16": (4, 16.0, 120.0, 0.068, "shared", "memory-optimized"),
+        "CSO8A32": (8, 32.0, 120.0, 0.129, "shared", "memory-optimized"),
         "CSO16A64": (16, 64.0, 120.0, 0.254, "shared", "memory-optimized"),
     }
 
@@ -88,6 +88,7 @@ def _build_price_map(items: list[dict]) -> dict[str, float]:
 async def _get_auth_token(base_url: str, username: str, password: str) -> str | None:
     """Legacy auth function kept for test compatibility."""
     import httpx
+
     payload = {"ApplicationId": 1, "Username": username, "Password": password}
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -108,6 +109,7 @@ async def _get_auth_token(base_url: str, username: str, password: str) -> str | 
 async def _fetch_server_types(base_url: str, token: str) -> list[dict]:
     """Legacy server types fetch kept for test compatibility."""
     import httpx
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             r = await client.post(

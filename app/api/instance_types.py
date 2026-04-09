@@ -45,6 +45,8 @@ async def list_instance_types(
     pq.filter_if(arch, lambda v: InstanceType.arch == v)
 
     return await pq.execute(
-        db, limit=limit, offset=offset,
+        db,
+        limit=limit,
+        offset=offset,
         order_by=(InstanceType.provider_id, InstanceType.name),
     )

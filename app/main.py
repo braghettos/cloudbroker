@@ -52,10 +52,7 @@ def _clean_validation_errors(errors: list[dict]) -> list[dict]:
     for err in errors:
         new_err = dict(err)
         if "ctx" in new_err and isinstance(new_err["ctx"], dict):
-            new_err["ctx"] = {
-                k: str(v) if isinstance(v, Exception) else v
-                for k, v in new_err["ctx"].items()
-            }
+            new_err["ctx"] = {k: str(v) if isinstance(v, Exception) else v for k, v in new_err["ctx"].items()}
         cleaned.append(new_err)
     return cleaned
 

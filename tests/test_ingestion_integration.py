@@ -29,9 +29,7 @@ async def _count(model):
 async def _provider_stats(slug: str) -> dict:
     """Get instance_type and price counts for a provider."""
     async with AsyncSessionLocal() as db:
-        provider = (
-            await db.execute(select(Provider).where(Provider.slug == slug).limit(1))
-        ).scalars().first()
+        provider = (await db.execute(select(Provider).where(Provider.slug == slug).limit(1))).scalars().first()
         if not provider:
             return {"exists": False}
         it_count = (
@@ -48,9 +46,7 @@ async def _provider_stats(slug: str) -> dict:
             )
         ).scalar_one()
         region_count = (
-            await db.execute(
-                select(func.count()).select_from(Region).where(Region.provider_id == provider.id)
-            )
+            await db.execute(select(func.count()).select_from(Region).where(Region.provider_id == provider.id))
         ).scalar_one()
         return {"exists": True, "instance_types": it_count, "prices": price_count, "regions": region_count}
 
@@ -294,8 +290,10 @@ class TestCostComponentIngestion:
 
         async with AsyncSessionLocal() as db:
             rate = (
-                await db.execute(select(EgressRate).where(EgressRate.provider_slug == "azure").limit(1))
-            ).scalars().first()
+                (await db.execute(select(EgressRate).where(EgressRate.provider_slug == "azure").limit(1)))
+                .scalars()
+                .first()
+            )
             assert rate is not None
             assert rate.egress_eur_per_gb > 0
 
@@ -438,9 +436,7 @@ class TestNormalizationVerification:
     async def test_arch_values_are_canonical(self):
         """All arch values should be x86_64 or arm64."""
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(InstanceType.arch).distinct().where(InstanceType.arch.isnot(None))
-            )
+            result = await db.execute(select(InstanceType.arch).distinct().where(InstanceType.arch.isnot(None)))
             arches = {r[0] for r in result.all()}
 
         assert arches <= {"x86_64", "arm64"}, f"Non-canonical arch values: {arches}"
@@ -449,9 +445,7 @@ class TestNormalizationVerification:
     async def test_cpu_type_values_are_valid(self):
         """cpu_type should be shared, dedicated, or None."""
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(InstanceType.cpu_type).distinct().where(InstanceType.cpu_type.isnot(None))
-            )
+            result = await db.execute(select(InstanceType.cpu_type).distinct().where(InstanceType.cpu_type.isnot(None)))
             types = {r[0] for r in result.all()}
 
         assert types <= {"shared", "dedicated"}, f"Invalid cpu_type values: {types}"
@@ -460,9 +454,7 @@ class TestNormalizationVerification:
     async def test_prices_are_positive(self):
         """All prices should be > 0."""
         async with AsyncSessionLocal() as db:
-            result = await db.execute(
-                select(func.count()).select_from(Price).where(Price.price_eur_per_hour <= 0)
-            )
+            result = await db.execute(select(func.count()).select_from(Price).where(Price.price_eur_per_hour <= 0))
             bad_count = result.scalar_one()
 
         assert bad_count == 0, f"{bad_count} prices have non-positive EUR values"
@@ -474,8 +466,6 @@ class TestNormalizationVerification:
             providers = (await db.execute(select(Provider))).scalars().all()
             for p in providers:
                 region_count = (
-                    await db.execute(
-                        select(func.count()).select_from(Region).where(Region.provider_id == p.id)
-                    )
+                    await db.execute(select(func.count()).select_from(Region).where(Region.provider_id == p.id))
                 ).scalar_one()
                 assert region_count > 0, f"Provider {p.slug} has no regions"

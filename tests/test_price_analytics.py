@@ -10,10 +10,8 @@ import datetime
 import uuid
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.main import app
 from app.models import InstanceType, Price, Provider, Region
 from app.models.price import PurchaseModel
 from app.models.provider import ProviderType
@@ -91,14 +89,6 @@ async def db_session():
             yield session
         finally:
             await session.rollback()
-
-
-@pytest.fixture
-async def client():
-    """Create async test client."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,54 @@
+{{- if .Values.ingestor.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "cloudbroker.fullname" . }}-ingest
+  labels:
+    {{- include "cloudbroker.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.ingestor.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.ingestor.backoffLimit }}
+      {{- if .Values.ingestor.ttlSecondsAfterFinished }}
+      ttlSecondsAfterFinished: {{ .Values.ingestor.ttlSecondsAfterFinished }}
+      {{- end }}
+      template:
+        metadata:
+          labels:
+            {{- include "cloudbroker.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: ingestor
+        spec:
+          serviceAccountName: {{ include "cloudbroker.serviceAccountName" . }}
+          restartPolicy: OnFailure
+          containers:
+            - name: ingest
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command:
+                {{- toYaml .Values.ingestor.command | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "cloudbroker.fullname" . }}
+              resources:
+                {{- toYaml .Values.ingestor.resources | nindent 16 }}
+              volumeMounts:
+                - name: secrets
+                  mountPath: {{ .Values.secretsDir }}
+                  readOnly: true
+          volumes:
+            - name: secrets
+              projected:
+                sources:
+                  # App secrets (database_url, api_key)
+                  - secret:
+                      name: {{ include "cloudbroker.secretName" . }}
+                  # Ingest secrets (provider API keys) — merged into same directory
+                  {{- if or .Values.ingestor.existingSecret .Values.ingestor.secrets }}
+                  - secret:
+                      name: {{ include "cloudbroker.ingestSecretName" . }}
+                  {{- end }}
+{{- end }}

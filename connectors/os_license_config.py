@@ -2,28 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.services.ingestion import ensure_os_license_rate
+from connectors._config_loader import load_yaml_config
 
 logger = get_logger(__name__)
 
-CONFIG_PATH = Path(__file__).resolve().parent / "os_license_rates_config.yaml"
-
-
-def _load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f) or {}
+_CONFIG_FILE = "os_license_rates_config.yaml"
 
 
 async def ingest_os_license_from_config(db: AsyncSession, provider_slug: str) -> None:
-    config = _load_config()
+    config = load_yaml_config(_CONFIG_FILE)
     provider_data = config.get(provider_slug)
     if not provider_data:
         logger.warning("No OS license config for provider", provider_slug=provider_slug)
@@ -40,4 +31,4 @@ async def ingest_os_license_from_config(db: AsyncSession, provider_slug: str) ->
 
 
 def get_os_license_config_providers() -> list[str]:
-    return list(_load_config().keys())
+    return list(load_yaml_config(_CONFIG_FILE).keys())

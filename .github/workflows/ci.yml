@@ -13,6 +13,8 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  CHART_REGISTRY: oci://ghcr.io/braghettos
+  CHART_NAME: cloudbroker-chart
 
 jobs:
   lint:
@@ -96,10 +98,53 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: false
 
+  helm:
+    name: Helm Chart
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint chart
+        run: helm lint helm/cloudbroker/
+
+      - name: Template chart (default values)
+        run: helm template cloudbroker helm/cloudbroker/
+
+      - name: Template chart (production values)
+        run: helm template cloudbroker helm/cloudbroker/ -f helm/cloudbroker/examples/values-production.yaml
+
+      - name: Package chart
+        run: |
+          # On tag push, override version from git tag (strip 'v' prefix)
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+            helm package helm/cloudbroker/ --version "$VERSION" --app-version "$VERSION" -d .helm-packages/
+          else
+            helm package helm/cloudbroker/ -d .helm-packages/
+          fi
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+      - name: Push chart to GHCR (OCI)
+        if: github.event_name == 'push'
+        run: |
+          for pkg in .helm-packages/*.tgz; do
+            helm push "$pkg" ${{ env.CHART_REGISTRY }}
+          done
+
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint, test, helm]
     permissions:
       contents: read
       packages: write

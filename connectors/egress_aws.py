@@ -8,9 +8,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_egress_rate
 
 logger = get_logger(__name__)
 
@@ -19,17 +17,12 @@ logger = get_logger(__name__)
 _REP_LOCATION = "EU (Ireland)"
 
 
-def _get_pricing_client():
-    try:
-        import boto3
-    except ImportError:
-        raise RuntimeError("boto3 is required for AWS egress ingestion. Install with: pip install boto3")
-    return boto3.client("pricing", region_name="us-east-1")
+from connectors._cloud_clients import get_aws_pricing_client
 
 
 def _fetch_data_transfer_products_sync() -> list[dict]:
     """Fetch GetProducts for EC2 data transfer. Returns list of product dicts."""
-    client = _get_pricing_client()
+    client = get_aws_pricing_client()
     products: list[dict] = []
     next_token = None
     # productFamily "Data Transfer" + location to get region-specific egress
@@ -121,22 +114,7 @@ def _fetch_egress_rates_aws() -> tuple[float, float, float | None]:
 
 async def ingest_egress_aws(db: AsyncSession) -> None:
     """Ingest AWS egress rates and upsert into egress_rates."""
+    from connectors._egress_helper import ingest_egress_from_usd
+
     egress_usd, free_gb, cross_usd = await asyncio.to_thread(_fetch_egress_rates_aws)
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    egress_eur = to_eur(egress_usd, rate_usd_eur)
-    cross_eur = to_eur(cross_usd, rate_usd_eur) if cross_usd is not None else None
-    # Cross-AZ (same region): AWS typically ~$0.01/GB
-    cross_az_eur = to_eur(0.01, rate_usd_eur)
-    await ensure_egress_rate(
-        db,
-        provider_slug="aws",
-        egress_eur_per_gb=round(egress_eur, 6),
-        free_tier_gb_per_month=free_gb,
-        cross_region_eur_per_gb=round(cross_eur, 6) if cross_eur else None,
-        cross_az_eur_per_gb=round(cross_az_eur, 6) if cross_az_eur else None,
-    )
-    logger.info(
-        "Ingested AWS egress rate",
-        egress_eur_per_gb=round(egress_eur, 4),
-        free_tier_gb_per_month=free_gb,
-    )
+    await ingest_egress_from_usd(db, "aws", egress_usd, free_gb, cross_usd)

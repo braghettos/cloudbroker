@@ -88,7 +88,7 @@ class TestUpcloudConnectorMocked:
     async def test_fetch_plans_parses_response(self):
         from connectors.upcloud import _fetch_plans
 
-        respx.get("https://api.upcloud.com/1.2/plan").mock(
+        respx.get("https://api.upcloud.com/1.3/plan").mock(
             return_value=httpx.Response(200, json={
                 "plans": {
                     "plan": [
@@ -107,7 +107,7 @@ class TestUpcloudConnectorMocked:
     async def test_fetch_zones_parses_response(self):
         from connectors.upcloud import _fetch_zones
 
-        respx.get("https://api.upcloud.com/1.2/zone").mock(
+        respx.get("https://api.upcloud.com/1.3/zone").mock(
             return_value=httpx.Response(200, json={
                 "zones": {
                     "zone": [
@@ -124,45 +124,30 @@ class TestUpcloudConnectorMocked:
 
 @pytest.mark.asyncio
 class TestExoscaleConnectorMocked:
-    """Mocked tests for Exoscale connector."""
-
-    @respx.mock
-    async def test_fetch_instance_types_parses_response(self, monkeypatch):
-        from connectors import exoscale
-
-        monkeypatch.setattr(exoscale.settings, "exoscale_api_key", "test-key")
-        monkeypatch.setattr(exoscale.settings, "exoscale_api_secret", "test-secret")
-
-        respx.get("https://api.exoscale.com/v2/instance-type").mock(
-            return_value=httpx.Response(200, json={
-                "instance-types": [
-                    {"id": "b612021a-c0a1-4874-bc4f-2bc19169fcd3", "name": "standard.large",
-                     "cpus": 4, "memory": 8589934592, "disk": 0, "unit-price": 0.048},
-                    {"id": "c2b12bb4-78d0-4e6d-b98e-cfb7baad5c01", "name": "cpu.extra-large",
-                     "cpus": 8, "memory": 17179869184, "disk": 0, "unit-price": 0.096},
-                ]
-            })
-        )
-        types = await exoscale._fetch_instance_types("at-vie-1")
-        assert len(types) == 2
-        assert types[0]["name"] == "standard.large"
-        assert types[0]["cpus"] == 4
+    """Tests for Exoscale config-based connector."""
 
     def test_parse_family(self):
         from connectors.exoscale import _parse_family
-        assert _parse_family("standard-large") == "standard"
-        assert _parse_family("cpu-huge") == "cpu"
-        assert _parse_family("memory-mega") == "memory"
+        assert _parse_family("standard-large") == "general-purpose"
+        assert _parse_family("cpu-huge") == "compute-optimized"
+        assert _parse_family("memory-mega") == "memory-optimized"
         assert _parse_family("gpu-small") == "gpu"
 
-    @respx.mock
-    async def test_missing_credentials_returns_early(self, monkeypatch):
-        from connectors import exoscale
-        monkeypatch.setattr(exoscale.settings, "exoscale_api_key", None)
-        monkeypatch.setattr(exoscale.settings, "exoscale_api_secret", None)
+    def test_get_plans_returns_expected_count(self):
+        from connectors.exoscale import ExoscaleConnector
+        plans = ExoscaleConnector.get_plans()
+        assert len(plans) == 23  # 10 standard + 4 cpu + 4 memory + 5 storage
+        # Verify a known plan
+        standard_large = next(p for p in plans if p.name == "standard.large")
+        assert standard_large.vcpu == 4
+        assert standard_large.ram_gb == 8.0
+        assert standard_large.eur_per_hour == 0.093
+        assert standard_large.family == "general-purpose"
 
-        with pytest.raises(RuntimeError, match="EXOSCALE_API_KEY"):
-            await exoscale._fetch_instance_types("at-vie-1")
+    def test_regions_include_eu(self):
+        from connectors.exoscale import ExoscaleConnector
+        eu_regions = [r for r in ExoscaleConnector.REGIONS if r.is_eu]
+        assert len(eu_regions) >= 3  # AT, DE, BG
 
 
 

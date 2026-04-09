@@ -253,8 +253,23 @@ deploy-ingest: ## Run CloudBroker ingest-all as a Kubernetes Job (creates cloudb
 	@echo "Ingestion started. Follow: kubectl logs job/cloudbroker-ingest-all -n cloudbroker -f"
 	@kubectl wait --for=condition=complete job/cloudbroker-ingest-all -n cloudbroker --timeout=180s 2>/dev/null || true
 
+##@ Helm
+
+helm-lint: ## Lint the Helm chart
+	helm lint helm/cloudbroker/
+
+helm-template: ## Render Helm templates (dry-run)
+	helm template cloudbroker helm/cloudbroker/
+
+helm-template-prod: ## Render Helm templates with production values
+	helm template cloudbroker helm/cloudbroker/ -f helm/cloudbroker/examples/values-production.yaml
+
+helm-package: ## Package Helm chart into .tgz
+	@mkdir -p .helm-packages
+	helm package helm/cloudbroker/ -d .helm-packages/
+
 ##@ Cleanup
 
 clean: ## Remove caches and build artifacts
-	rm -rf .pytest_cache .ruff_cache htmlcov .coverage build dist *.egg-info
+	rm -rf .pytest_cache .ruff_cache htmlcov .coverage build dist *.egg-info .helm-packages
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

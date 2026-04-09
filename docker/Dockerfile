@@ -18,7 +18,8 @@ COPY migrations/ ./migrations/
 COPY scripts/ ./scripts/
 COPY alembic.ini ./
 
-RUN useradd -m appuser && chown -R appuser:appuser /app
+RUN useradd -m appuser && chown -R appuser:appuser /app \
+    && mkdir -p /run/secrets/cloudbroker && chown appuser:appuser /run/secrets/cloudbroker
 USER appuser
 
 ENV PYTHONUNBUFFERED=1

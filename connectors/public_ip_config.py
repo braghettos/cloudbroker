@@ -2,28 +2,19 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import yaml
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
 from app.services.ingestion import ensure_public_ip_rate
+from connectors._config_loader import load_yaml_config
 
 logger = get_logger(__name__)
 
-CONFIG_PATH = Path(__file__).resolve().parent / "public_ip_rates_config.yaml"
-
-
-def _load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    with open(CONFIG_PATH) as f:
-        return yaml.safe_load(f) or {}
+_CONFIG_FILE = "public_ip_rates_config.yaml"
 
 
 async def ingest_public_ip_from_config(db: AsyncSession, provider_slug: str) -> None:
-    config = _load_config()
+    config = load_yaml_config(_CONFIG_FILE)
     entry = config.get(provider_slug)
     if entry is None:
         logger.warning("No public IP config for provider", provider_slug=provider_slug)
@@ -34,8 +25,8 @@ async def ingest_public_ip_from_config(db: AsyncSession, provider_slug: str) -> 
 
 
 def get_public_ip_config_providers() -> list[str]:
-    return list(_load_config().keys())
+    return list(load_yaml_config(_CONFIG_FILE).keys())
 
 
-# Add hyperscaler defaults to config for API fallback
+# Hyperscaler defaults for API fallback
 PUBLIC_IP_FALLBACK_EUR = {"aws": 0.0046, "azure": 0.003, "gcp": 0.004}

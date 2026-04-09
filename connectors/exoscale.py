@@ -1,228 +1,99 @@
-"""Exoscale connector: fetch instance types and pricing from Exoscale API v2.
+"""Exoscale connector: config-based pricing for EU compute instances.
 
-API docs: https://openapi.exoscale.com/
-Auth: HMAC-SHA256 (required; register at https://portal.exoscale.com/u/{org}/iam/api-keys)
-Instance type listing: GET /instance-type (per-zone)
-Pricing: included in instance type response as `unit-price` field (CHF/hr or EUR/hr)
+Exoscale is a Swiss-headquartered provider with EU datacenters in Austria, Germany,
+Bulgaria, and Switzerland. Prices are uniform across all zones.
+
+API: https://api-{zone}.exoscale.com/v2 (requires HMAC-SHA256 auth; used for specs only)
+Pricing: Config-based — sourced from https://www.exoscale.com/pricing/ and
+    https://calculator.exoscale.com/. Update _PLANS when pricing changes.
+
+Note: Exoscale migrated from zone-as-query-param to zone-in-hostname in API v2.
+    The pricing API was removed from public responses. We use config-based pricing
+    to avoid auth dependency for the most common use case.
 """
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-import time
-
-import httpx
-
-from app.core.config import settings
-from app.core.logging import get_logger
-from app.models.price import PurchaseModel
 from app.models.provider import ProviderType
-from app.services.ingestion import (
-    append_price,
-    ensure_instance_type,
-    ensure_provider,
-    ensure_region,
-)
-from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = get_logger(__name__)
-
-EXOSCALE_API_BASE = "https://api.exoscale.com/v2"
-
-# Exoscale zones with their region metadata
-# Zone list from: https://www.exoscale.com/datacenters/
-EXOSCALE_ZONES = [
-    {"slug": "ch-gva-2", "name": "Geneva 2", "country": "CH", "is_eu": False, "zone": "ch-gva-2"},
-    {"slug": "ch-gva-3", "name": "Geneva 3", "country": "CH", "is_eu": False, "zone": "ch-gva-2"},
-    {"slug": "at-vie-1", "name": "Vienna 1", "country": "AT", "is_eu": True, "zone": "at-vie-1"},
-    {"slug": "at-vie-2", "name": "Vienna 2", "country": "AT", "is_eu": True, "zone": "at-vie-1"},
-    {"slug": "de-muc-1", "name": "Munich 1", "country": "DE", "is_eu": True, "zone": "de-muc-1"},
-    {"slug": "bg-sof-1", "name": "Sofia 1", "country": "BG", "is_eu": True, "zone": "bg-sof-1"},
-]
+from connectors._config_connector import BaseConfigConnector, ConfigPlan, ConfigRegion
 
 
-def _exoscale_auth_headers(api_key: str, api_secret: str, method: str, path: str, body: bytes = b"") -> dict:
-    """Generate Exoscale API v2 HMAC-SHA256 authentication headers."""
-    timestamp = str(int(time.time()))
-    body_hash = hashlib.sha256(body).hexdigest() if body else ""
-    message = f"{method}\n{path}\n\n{timestamp}\n{body_hash}"
-    signature = base64.b64encode(
-        hmac.new(api_secret.encode(), message.encode(), hashlib.sha256).digest()
-    ).decode()
-    return {
-        "X-Exo-Api-Key": api_key,
-        "X-Exo-Timestamp": timestamp,
-        "X-Exo-Signature": signature,
-        "Content-Type": "application/json",
+class ExoscaleConnector(BaseConfigConnector):
+    PROVIDER_SLUG = "exoscale"
+    PROVIDER_NAME = "Exoscale"
+    PROVIDER_WEBSITE = "https://www.exoscale.com"
+    PROVIDER_TYPE = ProviderType.EU
+
+    REGIONS = [
+        ConfigRegion("ch-gva-2", "Geneva", "CH", False),
+        ConfigRegion("at-vie-1", "Vienna 1", "AT", True),
+        ConfigRegion("at-vie-2", "Vienna 2", "AT", True),
+        ConfigRegion("de-muc-1", "Munich", "DE", True),
+        ConfigRegion("bg-sof-1", "Sofia", "BG", True),
+    ]
+
+    # Sources: https://www.exoscale.com/pricing/ — Compute Instances (EUR/hr, uniform across zones)
+    # (name, vcpu, ram_gb, eur_per_hour, family, cpu_type)
+    _PLANS: dict[str, tuple[int, float, float, str, str]] = {
+        # Standard (General Purpose)
+        "standard.micro":       (1,   0.5,  0.007, "general-purpose",   "dedicated"),
+        "standard.tiny":        (1,   1.0,  0.015, "general-purpose",   "dedicated"),
+        "standard.small":       (2,   2.0,  0.023, "general-purpose",   "dedicated"),
+        "standard.medium":      (2,   4.0,  0.047, "general-purpose",   "dedicated"),
+        "standard.large":       (4,   8.0,  0.093, "general-purpose",   "dedicated"),
+        "standard.extra-large": (4,  16.0,  0.187, "general-purpose",   "dedicated"),
+        "standard.huge":        (8,  32.0,  0.373, "general-purpose",   "dedicated"),
+        "standard.mega":        (12, 64.0,  0.747, "general-purpose",   "dedicated"),
+        "standard.titan":       (16, 128.0, 1.493, "general-purpose",   "dedicated"),
+        "standard.jumbo":       (24, 225.0, 2.240, "general-purpose",   "dedicated"),
+        # CPU-Optimized
+        "cpu.extra-large":      (8,  16.0,  0.230, "compute-optimized", "dedicated"),
+        "cpu.huge":             (16, 32.0,  0.470, "compute-optimized", "dedicated"),
+        "cpu.mega":             (32, 64.0,  0.930, "compute-optimized", "dedicated"),
+        "cpu.titan":            (40, 128.0, 1.870, "compute-optimized", "dedicated"),
+        # Memory-Optimized
+        "memory.extra-large":   (2,  16.0,  0.140, "memory-optimized",  "dedicated"),
+        "memory.huge":          (4,  32.0,  0.280, "memory-optimized",  "dedicated"),
+        "memory.mega":          (8,  64.0,  0.560, "memory-optimized",  "dedicated"),
+        "memory.titan":         (12, 128.0, 1.120, "memory-optimized",  "dedicated"),
+        # Storage-Optimized
+        "storage.extra-large":  (4,  16.0,  0.140, "storage-optimized", "dedicated"),
+        "storage.huge":         (8,  32.0,  0.280, "storage-optimized", "dedicated"),
+        "storage.mega":         (12, 64.0,  0.560, "storage-optimized", "dedicated"),
+        "storage.titan":        (16, 128.0, 1.120, "storage-optimized", "dedicated"),
+        "storage.jumbo":        (24, 225.0, 1.870, "storage-optimized", "dedicated"),
     }
 
-
-async def _fetch_instance_types(zone: str) -> list[dict]:
-    """Fetch all instance types for a zone from the Exoscale API.
-
-    Requires EXOSCALE_API_KEY and EXOSCALE_API_SECRET.
-    """
-    if not settings.exoscale_api_key or not settings.exoscale_api_secret:
-        raise RuntimeError(
-            "EXOSCALE_API_KEY and EXOSCALE_API_SECRET are required. "
-            "Generate them at https://portal.exoscale.com/u/{org}/iam/api-keys"
-        )
-
-    path = f"/instance-type"
-    url = f"{EXOSCALE_API_BASE}{path}"
-    headers = _exoscale_auth_headers(
-        settings.exoscale_api_key, settings.exoscale_api_secret, "GET", path
-    )
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        r = await client.get(url, headers=headers, params={"zone": zone})
-        r.raise_for_status()
-        data = r.json()
-
-    return data.get("instance-types") or []
+    @classmethod
+    def get_plans(cls) -> list[ConfigPlan]:
+        return [
+            ConfigPlan(
+                name=name,
+                vcpu=vcpu,
+                ram_gb=ram_gb,
+                eur_per_hour=eur_per_hour,
+                family=family,
+                cpu_type=cpu_type,
+            )
+            for name, (vcpu, ram_gb, eur_per_hour, family, cpu_type) in cls._PLANS.items()
+        ]
 
 
+# Module-level ingest function for CLI dispatch compatibility
+async def ingest(db, only_eu=True, purchase_model="on_demand"):
+    await ExoscaleConnector.ingest(db, only_eu, purchase_model)
+
+
+# Keep _parse_family for backwards compatibility with tests
 def _parse_family(name: str) -> str:
-    """Infer instance family from Exoscale instance type name."""
+    """Infer instance family from Exoscale instance type name using common taxonomy."""
     n = name.lower()
     if n.startswith("gpu"):
         return "gpu"
     if n.startswith("cpu"):
-        return "cpu"
+        return "compute-optimized"
     if n.startswith("memory"):
-        return "memory"
+        return "memory-optimized"
     if n.startswith("storage"):
-        return "storage"
-    return "standard"
-
-
-async def ingest(
-    db: AsyncSession,
-    only_eu: bool = True,
-    purchase_model: str = "on_demand",
-) -> None:
-    """Ingest Exoscale instance types and pricing from the Exoscale API v2.
-
-    Requires EXOSCALE_API_KEY and EXOSCALE_API_SECRET environment variables.
-    """
-    purchase = PurchaseModel(purchase_model)
-    if purchase != PurchaseModel.ON_DEMAND:
-        logger.warning(
-            "Exoscale only supports on-demand pricing, ignoring purchase_model",
-            purchase_model=purchase_model,
-        )
-        purchase = PurchaseModel.ON_DEMAND
-
-    if not settings.exoscale_api_key or not settings.exoscale_api_secret:
-        logger.error(
-            "Exoscale ingestion skipped: EXOSCALE_API_KEY and EXOSCALE_API_SECRET not set. "
-            "Generate API keys at https://portal.exoscale.com/u/{org}/iam/api-keys"
-        )
-        return
-
-    provider = await ensure_provider(
-        db,
-        slug="exoscale",
-        name="Exoscale",
-        website="https://www.exoscale.com",
-        type=ProviderType.EU,
-    )
-    await db.flush()
-
-    zones_to_ingest = [z for z in EXOSCALE_ZONES if not only_eu or z["is_eu"]]
-
-    # Fetch instance types once per unique API zone (zones share the same instance type catalog)
-    seen_api_zones: dict[str, list[dict]] = {}
-    for zone_meta in zones_to_ingest:
-        api_zone = zone_meta["zone"]
-        if api_zone not in seen_api_zones:
-            try:
-                types = await _fetch_instance_types(api_zone)
-                seen_api_zones[api_zone] = types
-                logger.info("Exoscale instance types fetched", zone=api_zone, count=len(types))
-            except Exception as e:
-                logger.error("Exoscale API fetch failed", zone=api_zone, error=str(e))
-                seen_api_zones[api_zone] = []
-
-    total_types = 0
-    inserted_prices = 0
-
-    for zone_meta in zones_to_ingest:
-        region = await ensure_region(
-            db,
-            provider_id=provider.id,
-            slug=zone_meta["slug"],
-            name=zone_meta["name"],
-            country=zone_meta["country"],
-            is_eu=zone_meta["is_eu"],
-        )
-        await db.flush()
-
-        api_types = seen_api_zones.get(zone_meta["zone"], [])
-        for item in api_types:
-            name = item.get("name") or item.get("id") or ""
-            if not name:
-                continue
-
-            vcpu = item.get("cpus") or item.get("cpu-count") or 0
-            # memory-bytes → GB
-            memory_bytes = item.get("memory") or item.get("memory-bytes") or 0
-            ram_gb = memory_bytes / (1024 ** 3) if memory_bytes > 0 else 0.0
-            disk_bytes = item.get("disk") or item.get("disk-bytes") or 0
-            disk_gb = disk_bytes / (1024 ** 3) if disk_bytes > 0 else None
-
-            if vcpu <= 0 or ram_gb <= 0:
-                continue
-
-            # Price: Exoscale returns price in CHF/month in their API
-            # Convert to EUR/hr using CHF→EUR ≈ 1.05 exchange rate, /730 hr/month
-            # The API returns `unit-price` as the hourly cost in CHF
-            unit_price_chf = (
-                item.get("unit-price")
-                or item.get("price")
-                or 0.0
-            )
-            price_chf_per_hr = float(unit_price_chf)
-            # CHF is close to EUR (roughly 1:1 within ±5%). Use source_currency to mark.
-            price_eur_per_hr = price_chf_per_hr * 0.95  # approximate CHF→EUR
-
-            gpu_count = item.get("gpu-count") or item.get("gpus") or None
-
-            it = await ensure_instance_type(
-                db,
-                provider_id=provider.id,
-                name=name,
-                vcpu=int(vcpu),
-                ram_gb=float(ram_gb),
-                family=_parse_family(name),
-                arch="x86_64",
-                disk_gb=disk_gb,
-                gpu_count=int(gpu_count) if gpu_count else None,
-            )
-            await db.flush()
-            total_types += 1
-
-            if price_chf_per_hr > 0:
-                p = await append_price(
-                    db,
-                    instance_type_id=it.id,
-                    region_id=region.id,
-                    purchase_model=purchase,
-                    currency="CHF",
-                    price_per_hour=price_chf_per_hr,
-                    price_eur_per_hour=price_eur_per_hr,
-                    source_currency="CHF",
-                )
-                if p:
-                    inserted_prices += 1
-
-    logger.info(
-        "Exoscale ingestion completed",
-        provider_slug="exoscale",
-        regions=len(zones_to_ingest),
-        instance_types=total_types,
-        price_rows_inserted=inserted_prices,
-    )
+        return "storage-optimized"
+    return "general-purpose"

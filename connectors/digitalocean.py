@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from decimal import Decimal
 
 import httpx
@@ -121,9 +120,10 @@ async def ingest(
     purchase_model: str = "on_demand",
 ) -> None:
     """Ingest DigitalOcean sizes and regions into database."""
-    token = os.environ.get("DIGITALOCEAN_API_TOKEN")
+    from app.core.config import settings
+    token = settings.digitalocean_api_token
     if not token:
-        raise RuntimeError("DIGITALOCEAN_API_TOKEN environment variable is required for DigitalOcean ingestion")
+        raise RuntimeError("digitalocean_api_token is required for DigitalOcean ingestion (set via env var or secret file)")
 
     purchase = PurchaseModel(purchase_model)
     if purchase != PurchaseModel.ON_DEMAND:
@@ -197,22 +197,36 @@ async def ingest(
         # DigitalOcean sizes are typically x86_64
         arch = "x86_64"
 
-        # Family can be inferred from slug (e.g., s-1vcpu-1gb -> general purpose)
-        family = None
+        # Family normalized to common taxonomy
+        family: str | None = None
+        cpu_type: str | None = None
         if slug.startswith("s-"):
-            family = "standard"
-        elif slug.startswith("c-"):
-            family = "cpu-optimized"
-        elif slug.startswith("m-"):
-            family = "memory-optimized"
-        elif slug.startswith("g-"):
             family = "general-purpose"
+            cpu_type = "shared"
+        elif slug.startswith("c-") or slug.startswith("c2-"):
+            family = "compute-optimized"
+            cpu_type = "dedicated"
+        elif slug.startswith("m-") or slug.startswith("m3-") or slug.startswith("m6-"):
+            family = "memory-optimized"
+            cpu_type = "dedicated"
+        elif slug.startswith("g-") or slug.startswith("gd-"):
+            family = "general-purpose"
+            cpu_type = "dedicated"
+        elif slug.startswith("so-") or slug.startswith("so1_5-"):
+            family = "storage-optimized"
+            cpu_type = "dedicated"
+        elif slug.startswith("gpu-"):
+            family = "gpu"
+            cpu_type = "dedicated"
+        else:
+            family = "general-purpose"
+            cpu_type = "shared"
 
         disk_gb = float(size.get("disk") or 0) or None
         transfer_tb = float(size.get("transfer") or 0) or None
         is_available = bool(size.get("available", True))
 
-        # Ensure instance type
+        # Ensure instance type — all current DigitalOcean droplets are current gen
         it = await ensure_instance_type(
             db,
             provider_id=provider.id,
@@ -221,6 +235,8 @@ async def ingest(
             ram_gb=ram_gb,
             family=family,
             arch=arch,
+            cpu_type=cpu_type,
+            is_current_gen=True,
             disk_gb=disk_gb,
             disk_type="local_ssd",
             transfer_tb=transfer_tb,

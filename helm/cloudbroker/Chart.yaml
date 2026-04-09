@@ -1,0 +1,11 @@
+apiVersion: v2
+name: cloudbroker
+description: Self-hosted multi-cloud compute pricing marketplace
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://cloudbroker.fyi
+sources:
+  - https://github.com/braghettos/cloudbroker
+maintainers:
+  - name: Diego Braga

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import os
 from decimal import Decimal
 
 import httpx
@@ -22,7 +21,7 @@ from connectors._http import fetch_with_retry
 
 logger = get_logger(__name__)
 
-UPCLOUD_BASE = "https://api.upcloud.com/1.2"
+UPCLOUD_BASE = "https://api.upcloud.com/1.3"
 
 # Zone prefix -> country code
 ZONE_PREFIX_TO_COUNTRY = {
@@ -103,16 +102,17 @@ def _get_auth_headers() -> dict[str, str]:
     """
     Get auth headers: prefer UPCLOUD_API_TOKEN (Bearer), else UPCLOUD_USERNAME + UPCLOUD_PASSWORD (Basic).
     """
-    token = (os.environ.get("UPCLOUD_API_TOKEN") or "").strip()
+    from app.core.config import settings
+    token = (settings.upcloud_api_token or "").strip()
     if token:
         return _auth_headers_from_token(token)
-    username = (os.environ.get("UPCLOUD_USERNAME") or "").strip()
-    password = (os.environ.get("UPCLOUD_PASSWORD") or "").strip()
+    username = (settings.upcloud_username or "").strip()
+    password = (settings.upcloud_password or "").strip()
     if username and password:
         return _auth_headers_from_credentials(username, password)
     raise RuntimeError(
-        "UpCloud ingestion requires either UPCLOUD_API_TOKEN (recommended, create at hub.upcloud.com/account/api-tokens) "
-        "or UPCLOUD_USERNAME and UPCLOUD_PASSWORD"
+        "upcloud_api_token (or upcloud_username + upcloud_password) is required for UpCloud ingestion "
+        "(set via env var or secret file)"
     )
 
 
@@ -187,8 +187,10 @@ async def ingest(
             name=name,
             vcpu=cpu,
             ram_gb=ram_gb,
-            family="cloud",
+            family="general-purpose",
             arch="x86_64",
+            cpu_type="dedicated",
+            is_current_gen=True,
             disk_gb=storage_gb,
             disk_type="local_ssd",
             transfer_tb=transfer_tb,

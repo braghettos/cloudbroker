@@ -2,9 +2,10 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._pagination import PaginatedQuery
 from app.api.utils import parse_id_or_slug
 from app.core.constants import PROVIDERS_PUBLISH_CARBON
 from app.core.database import get_db
@@ -45,39 +46,29 @@ async def list_regions(
 ) -> PaginatedResponse[RegionResponse]:
     """List regions with optional provider and sustainability filters."""
     base = select(Region).join(Provider, Region.provider_id == Provider.id)
-    count_base = (
-        select(func.count())
-        .select_from(Region)
-        .join(Provider, Region.provider_id == Provider.id)
-    )
+    pq = PaginatedQuery(base, Region)
+    pq.join_count(Provider, Region.provider_id == Provider.id)
 
     ref = parse_id_or_slug(provider)
     if ref is not None:
         if isinstance(ref, int):
-            base = base.where(Region.provider_id == ref)
-            count_base = count_base.where(Region.provider_id == ref)
+            pq.filter(Region.provider_id == ref)
         else:
-            base = base.where(Provider.slug == ref)
-            count_base = count_base.where(Provider.slug == ref)
+            pq.filter(Provider.slug == ref)
 
     if providers_publish_carbon_only:
-        base = base.where(Provider.slug.in_(PROVIDERS_PUBLISH_CARBON))
-        count_base = count_base.where(Provider.slug.in_(PROVIDERS_PUBLISH_CARBON))
+        pq.filter(Provider.slug.in_(PROVIDERS_PUBLISH_CARBON))
 
     if min_renewable_pct is not None and min_renewable_pct > 0:
-        base = base.where(Region.renewable_energy_pct >= min_renewable_pct)
-        count_base = count_base.where(Region.renewable_energy_pct >= min_renewable_pct)
+        pq.filter(Region.renewable_energy_pct >= min_renewable_pct)
 
     if max_carbon_intensity is not None:
-        base = base.where(Region.carbon_intensity_g_co2_kwh <= max_carbon_intensity)
-        count_base = count_base.where(Region.carbon_intensity_g_co2_kwh <= max_carbon_intensity)
+        pq.filter(Region.carbon_intensity_g_co2_kwh <= max_carbon_intensity)
 
-    total = (await db.execute(count_base)).scalar_one()
-    stmt = base.order_by(Region.provider_id, Region.slug).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    items = result.scalars().unique().all()
-
-    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+    return await pq.execute(
+        db, limit=limit, offset=offset,
+        order_by=(Region.provider_id, Region.slug),
+    )
 
 
 @router.get("/{region_id}/sustainability", response_model=SustainabilityResponse)

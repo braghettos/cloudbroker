@@ -5,21 +5,12 @@ from __future__ import annotations
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_egress_rate
 
 logger = get_logger(__name__)
 
 
-def _get_billing_client():
-    try:
-        from google.cloud import billing_v1
-    except ImportError:
-        raise RuntimeError(
-            "google-cloud-billing is required for GCP egress. Install with: pip install google-cloud-billing"
-        )
-    return billing_v1.CloudCatalogClient()
+from connectors._cloud_clients import get_gcp_billing_client
 
 
 def _is_network_egress_sku(sku) -> bool:
@@ -90,7 +81,7 @@ def _fetch_egress_rates_gcp() -> tuple[float, float, float | None]:
     Fetch GCP internet egress rate from Billing Catalog. Returns (usd_per_gb, free_gb, cross_usd).
     Uses europe-west1 as representative.
     """
-    client = _get_billing_client()
+    client = get_gcp_billing_client()
     services = list(client.list_services())
     compute_service = None
     for s in services:
@@ -119,23 +110,7 @@ def _fetch_egress_rates_gcp() -> tuple[float, float, float | None]:
 
 async def ingest_egress_gcp(db: AsyncSession) -> None:
     """Ingest GCP egress rates and upsert into egress_rates."""
+    from connectors._egress_helper import ingest_egress_from_usd
+
     egress_usd, free_gb, cross_usd = await asyncio.to_thread(_fetch_egress_rates_gcp)
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    egress_eur = to_eur(egress_usd, rate_usd_eur)
-    cross_eur = to_eur(cross_usd, rate_usd_eur) if cross_usd else None
-    # Cross-AZ (same region): GCP typically ~0.01 USD/GB
-    cross_az_usd = 0.01
-    cross_az_eur = to_eur(cross_az_usd, rate_usd_eur)
-    await ensure_egress_rate(
-        db,
-        provider_slug="gcp",
-        egress_eur_per_gb=round(egress_eur, 6),
-        free_tier_gb_per_month=free_gb,
-        cross_region_eur_per_gb=round(cross_eur, 6) if cross_eur else None,
-        cross_az_eur_per_gb=round(cross_az_eur, 6),
-    )
-    logger.info(
-        "Ingested GCP egress rate",
-        egress_eur_per_gb=round(egress_eur, 4),
-        free_tier_gb_per_month=free_gb,
-    )
+    await ingest_egress_from_usd(db, "gcp", egress_usd, free_gb, cross_usd)

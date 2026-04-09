@@ -27,6 +27,8 @@ class TestAwsParsing:
         assert _parse_vcpu("16") == 16
         assert _parse_vcpu("") == 0
         assert _parse_vcpu("invalid") == 0
+        # Fractional vCPUs round up to 1 (t2.nano = 0.5)
+        assert _parse_vcpu("0.5") == 1
 
     def test_map_physical_processor_intel(self):
         from connectors.aws import _map_aws_physical_processor_to_arch
@@ -178,13 +180,13 @@ class TestScalewayParsing:
     def test_infer_family_development(self):
         from connectors.scaleway import _infer_family
 
-        assert _infer_family("DEV1-S") == "development"
-        assert _infer_family("STARDUST1-S") == "development"
+        assert _infer_family("DEV1-S") == "general-purpose"
+        assert _infer_family("STARDUST1-S") == "general-purpose"
 
     def test_infer_family_performance(self):
         from connectors.scaleway import _infer_family
 
-        assert _infer_family("PRO2-S") == "performance"
+        assert _infer_family("PRO2-S") == "compute-optimized"
 
     def test_infer_family_gpu(self):
         from connectors.scaleway import _infer_family
@@ -196,7 +198,7 @@ class TestScalewayParsing:
     def test_infer_family_default(self):
         from connectors.scaleway import _infer_family
 
-        assert _infer_family("UNKNOWN-1") == "standard"
+        assert _infer_family("UNKNOWN-1") == "general-purpose"
 
 
 class TestApiUtils:

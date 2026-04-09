@@ -15,3 +15,6 @@ coverage.xml
 .coverage
 htmlcov/
 deploy/
+helm/
+.helm-packages/
+.claude/

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from decimal import Decimal
 
 import httpx
@@ -92,9 +91,10 @@ async def ingest(
     purchase_model: str = "on_demand",
 ) -> None:
     """Ingest Seeweb Cloud Server plans and pricing into database."""
-    api_token = os.environ.get("SEEWEB_API_TOKEN")
-    username = os.environ.get("SEEWEB_USERNAME")
-    password = os.environ.get("SEEWEB_PASSWORD")
+    from app.core.config import settings
+    api_token = settings.seeweb_api_token
+    username = settings.seeweb_username
+    password = settings.seeweb_password
 
     if api_token:
         plans_list = await _fetch_plans(api_token=api_token)
@@ -103,7 +103,8 @@ async def ingest(
         plans_list = await _fetch_plans(jwt_token=jwt_token)
     else:
         raise RuntimeError(
-            "SEEWEB_API_TOKEN or (SEEWEB_USERNAME and SEEWEB_PASSWORD) environment variables are required for Seeweb ingestion"
+            "seeweb_api_token (or seeweb_username + seeweb_password) is required for Seeweb ingestion "
+            "(set via env var or secret file)"
         )
 
     purchase = PurchaseModel(purchase_model)

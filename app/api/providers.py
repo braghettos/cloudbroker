@@ -1,9 +1,10 @@
 """Provider list endpoint."""
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._pagination import PaginatedQuery
 from app.core.database import get_db
 from app.core.security import verify_api_key
 from app.models import Provider
@@ -21,11 +22,5 @@ async def list_providers(
     offset: int = Query(0, ge=0),
 ) -> PaginatedResponse[ProviderResponse]:
     """List providers with pagination."""
-    count_stmt = select(func.count()).select_from(Provider)
-    total = (await db.execute(count_stmt)).scalar_one()
-
-    stmt = select(Provider).order_by(Provider.slug).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    items = result.scalars().all()
-
-    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+    pq = PaginatedQuery(select(Provider), Provider)
+    return await pq.execute(db, limit=limit, offset=offset, order_by=Provider.slug)

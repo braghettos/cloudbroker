@@ -1,368 +1,392 @@
-# Architecture
+# CloudBroker Architecture
 
-## Overview
+This document describes the architecture of CloudBroker, a multi-cloud instance recommendation and price comparison engine built with FastAPI, SQLAlchemy, and PostgreSQL.
 
-CloudBroker is a compute pricing marketplace API. It ingests instance pricing data from multiple cloud providers, normalizes it into a common schema, and exposes a recommendation engine that returns the cheapest instances matching a set of constraints (CPU, RAM, architecture, region, price ceiling).
+---
 
-It is the pricing backend for [Cloudburst Autoscaler](https://github.com/braghettos/cloudburst-autoscaler), which calls `POST /api/recommendations` to decide which cloud VM to provision when Kubernetes pods are unschedulable.
-
-```
-               ┌──────────────────────────────────────────────────┐
-               │                  CloudBroker                     │
-               │                                                  │
-  Ingestion    │   ┌──────────┐    ┌───────────┐    ┌─────────┐  │   API
-  (CLI)        │   │Connectors│───>│ Ingestion │───>│   DB    │  │   (FastAPI)
-  ─────────────┤   │ GCP,AWS, │    │  Service  │    │ Postgres│  ├──────────────
-  make ingest-*│   │ Azure,.. │    │ (upsert)  │    │         │  │  /api/recommendations
-               │   └──────────┘    └───────────┘    └────┬────┘  │  /api/providers
-               │                                         │       │  /api/regions
-               │                    ┌───────────┐        │       │  /api/instance-types
-               │                    │Recommend- │<───────┘       │  /api/prices
-               │                    │ation      │                │  /api/price-analytics
-               │                    │ Engine    │                │
-               │                    └───────────┘                │
-               └──────────────────────────────────────────────────┘
-```
-
-## Data Model
-
-Core entities form a hierarchy from provider down to individual price records. Cost-rate tables (keyed by `provider_slug`) support TCO calculation:
+## Project Structure
 
 ```
-Provider ──1:N──> Region
-    │                │
-    └──1:N──> InstanceType ──1:N──> Price <──N:1── Region
-                                      │
-                                   FxRate (lookup)
-
-Cost rates (by provider_slug):
-  EgressRate, StorageRate, PublicIpRate, OsLicenseRate
+app/                          # FastAPI application
+  api/                        # Routers
+    recommendations.py        # POST /api/recommendations
+    providers.py              # GET /api/providers
+    regions.py                # GET /api/regions
+    instance_types.py         # GET /api/instance-types
+    prices.py                 # GET /api/prices
+    price_analytics.py        # GET /api/price-analytics/{changes,trends}
+    health.py                 # GET /health
+    metrics.py                # GET /api/metrics
+    _pagination.py            # PaginatedQuery builder (limit/offset)
+    utils.py                  # Shared API utilities
+  core/                       # Cross-cutting infrastructure
+    config.py                 # Pydantic Settings with secrets_dir support
+    database.py               # AsyncSession factory (asyncpg)
+    security.py               # API key verification
+    logging.py                # Structured logging setup
+    fx.py                     # FX rate lookup (USD -> EUR conversion)
+    middleware.py              # Request timing, CORS, rate limiting
+    constants.py              # Provider lists, carbon-publishing providers
+    exceptions.py             # Custom exception handlers (validation, DB errors)
+    metrics.py                # Prometheus-style metrics collection
+  models/                     # SQLAlchemy ORM models
+    provider.py               # Provider + ProviderType enum (HYPERSCALER, EU, REGIONAL)
+    region.py                 # Region (slug, display_name, country_code, is_eu, lat/lon)
+    instance_type.py          # InstanceType (vcpu, ram_gb, family, arch, gpu_count, gpu_model, etc.)
+    price.py                  # Price (time-series, PurchaseModel enum: on_demand/spot/reserved)
+    fx_rate.py                # FxRate (currency pair rates)
+    egress_rate.py            # EgressRate (egress_eur_per_gb, cross_region_eur_per_gb)
+    storage_rate.py           # StorageRate (eur_per_gb_month by storage tier)
+    public_ip_rate.py         # PublicIpRate (eur_per_hour)
+    os_license_rate.py        # OsLicenseRate (eur_per_vcpu_hour by OS)
+    base.py                   # Declarative Base
+  schemas/                    # Pydantic v2 request/response models
+  services/                   # Business logic
+    recommendation_service.py # Orchestrator: fetch -> score -> rank -> respond
+    scoring.py                # 6 scoring functions (see Recommendation Scoring)
+    tco.py                    # TCO computation + rate fetching from DB
+    candidate_fetcher.py      # SQL query builder (15+ filters) + sustainability enrichment
+    ingestion.py              # Shared upsert helpers for all connectors
+    sustainability_service.py # Real-time carbon intensity (ENTSO-E, EIA APIs)
+    price_analytics.py        # Price change detection and trend analysis
+connectors/                   # Provider-specific ingestion modules
+  base.py                     # Abstract BaseConnector interface
+  _config_connector.py        # BaseConfigConnector for YAML-driven providers
+  _config_loader.py           # Shared YAML loader for config-based connectors
+  _cloud_clients.py           # Centralized boto3 / GCP client factories
+  _egress_helper.py           # Shared egress rate ingestion
+  _storage_helper.py          # Shared storage rate ingestion
+  _http.py                    # Shared HTTP client utilities
+  _verify_base.py             # Shared verification infrastructure
+  aws.py                      # AWS connector (bulk JSON pricing)
+  azure.py                    # Azure connector (Retail Prices API)
+  gcp.py                      # GCP connector (Compute Engine API)
+  hetzner.py                  # Hetzner connector (authenticated API)
+  digitalocean.py             # DigitalOcean connector (authenticated API)
+  ovh.py                      # OVH connector (public catalog)
+  scaleway.py                 # Scaleway connector (public catalog)
+  upcloud.py                  # UpCloud connector (authenticated API)
+  seeweb.py                   # Seeweb connector (authenticated API)
+  ibm_cloud.py                # IBM Cloud connector (authenticated API)
+  contabo.py                  # Contabo connector (config-based)
+  gcore.py                    # Gcore connector (config-based)
+  cherry_servers.py           # Cherry Servers connector (config-based)
+  clouding.py                 # Clouding connector (config-based)
+  exoscale.py                 # Exoscale connector (config-based)
+  aruba.py                    # Aruba Cloud connector (config-based)
+  egress_aws.py               # AWS egress rate ingestion
+  egress_azure.py             # Azure egress rate ingestion
+  egress_gcp.py               # GCP egress rate ingestion
+  egress_config.py            # Config-based egress rate ingestion
+  storage_aws.py              # AWS storage rate ingestion
+  storage_azure.py            # Azure storage rate ingestion
+  storage_gcp.py              # GCP storage rate ingestion
+  storage_config.py           # Config-based storage rate ingestion
+  sustainability.py           # Sustainability data connector
+  os_license_config.py        # OS license rate loader
+  public_ip_config.py         # Public IP rate loader
+  *_verify.py                 # Per-provider ingestion verification modules
+  *.yaml                      # Rate configuration files
+apps/ingestor/                # CLI entry point (python -m apps.ingestor ingest --provider ...)
+helm/cloudbroker/             # Helm chart for Kubernetes deployment
+migrations/                   # Alembic migrations (8 versions)
+  versions/
+    001_compute_pricing_marketplace.py
+    002_fx_rates_and_eur_metadata.py
+    003_convert_provider_type_enum_to_lowercase.py
+    004_add_egress_rates.py
+    005_add_cost_components.py
+    006_add_sustainability.py
+    007_add_price_composite_index.py
+    008_enhance_instance_type_and_price_schema.py
+tests/                        # Test suite
+config/                       # External configuration files
+scripts/                      # Utility scripts
+docker/                       # Dockerfiles
+docker-compose.yml            # Local development stack
+Makefile                      # Task runner (ingest, verify, test, deploy)
 ```
 
-### Provider
+---
 
-Represents a cloud provider. Each has a slug (e.g. `aws`, `hetzner`, `scaleway`) and a type that classifies its scale:
+## Data Flow
 
-| Type | Examples | Reliability Score |
-|------|----------|-------------------|
-| `HYPERSCALER` | AWS, Azure, GCP | 0.95 |
-| `EU` | Scaleway, OVH | 0.85 |
-| `REGIONAL` | Hetzner, DigitalOcean | 0.75 |
-
-### Region
-
-A data center location belonging to a provider. Key fields:
-
-- `slug`: Provider-specific identifier (e.g. `eu-west-1`, `fsn1`, `fr-par-1`)
-- `country`: ISO 2-letter code
-- `is_eu`: Whether the region is in the EU (used by the `EU` region constraint)
-
-Unique constraint: `(provider_id, slug)`.
-
-### InstanceType
-
-A VM size offered by a provider. Key fields:
-
-- `name`: Provider-specific name (e.g. `n1-standard-4`, `cx23`, `DEV1-S`)
-- `vcpu`, `ram_gb`: Compute specs
-- `arch`: `x86_64` or `arm64`
-- `gpu_count`: Optional GPU count for GPU instance types
-- `family`: Instance family (e.g. `N1`, `C2`, `CAX11`)
-- `metadata_json`: Optional JSON for provider-specific details
-
-Unique constraint: `(provider_id, name)`.
-
-### Price
-
-A point-in-time hourly price for an instance type in a region. Key fields:
-
-- `purchase_model`: `ON_DEMAND`, `SPOT`, or `RESERVED`
-- `currency`: Original currency (e.g. `USD`, `EUR`)
-- `price_per_hour`: Price in original currency
-- `price_eur_per_hour`: EUR-normalized price (nullable; filled via FX conversion)
-- `timestamp`: When the price was recorded (truncated to hour boundary)
-
-Prices are **append-only**. Duplicates within the same hour are skipped. The recommendation engine always uses the latest price per `(instance_type, region)` pair.
-
-### FxRate
-
-Exchange rate lookup table for currency normalization:
-
-- `from_currency` / `to_currency`: e.g. `USD` -> `EUR`
-- `rate`: Conversion factor
-- `effective_date`: When the rate applies
-
-When no fx_rates row exists, an in-memory fallback of `0.92` for USD->EUR is used. Load real FX data via a dedicated ingest path when available.
-
-## Recommendation Engine
-
-The core value of CloudBroker. Given resource constraints, it returns a ranked list of instance types scored by price efficiency and fit.
-
-### Request Flow
+### Ingestion Pipeline
 
 ```
-Client Request                  SQL Query                     Scoring
-─────────────                  ─────────                     ───────
-min_vcpu: 2          ──>   WHERE vcpu >= 2            ──>   For each candidate:
-min_ram_gb: 4              AND ram_gb >= 4.0                 1. normalized_price
-arch: x86_64               AND arch = 'x86_64'              2. resource_fit
-region: EU                 AND is_eu = true                  3. Apply weights
-max_price: 0.50            AND eff_price <= 0.50             4. Apply boosts/penalties
-allowed: [gcp,hetzner]    AND provider IN (...)              5. Sort by score DESC
+CLI (python -m apps.ingestor)
+  |
+  v
+Connector (aws.py, azure.py, contabo.py, ...)
+  |-- Fetches pricing data from provider API or config YAML
+  |-- Normalizes: family, arch, cpu_type, gpu_count, is_current_gen
+  |
+  v
+ingestion.py (shared upsert helpers)
+  |-- Upserts Provider, Region, InstanceType rows
+  |-- Inserts Price rows (time-series append)
+  |-- Upserts EgressRate, StorageRate, PublicIpRate, OsLicenseRate
+  |
+  v
+PostgreSQL
 ```
 
-### Candidate Filtering
-
-1. **Spec filter**: `vcpu >= min_vcpu`, `ram_gb >= min_ram_gb`, `arch = arch`
-2. **Price filter**: `COALESCE(price_eur_per_hour, price_per_hour) <= max_price`
-3. **Purchase model**: `ON_DEMAND`, `SPOT`, or `RESERVED`
-4. **Region constraint**: When `EU`, adds `WHERE is_eu = true`
-5. **Provider filter**: `allowed_providers` (whitelist) and `excluded_providers` (blacklist)
-6. **Latest price**: Subquery selects `MAX(timestamp)` per `(instance_type_id, region_id)` to use only the most recent price
-7. **GPU filter**: When `min_gpu_count` is set, require `gpu_count >= min_gpu_count`; when `gpu_type` is set, filter by instance type name substring match
-
-Architecture values are normalized: `amd64` -> `x86_64`, `aarch64` -> `arm64`.
-
-### Scoring
-
-Two scoring modes are available. The default is **legacy mode** (price + fit):
-
-#### Legacy Mode (default)
+### API Request Flow
 
 ```
-score = (price_weight × normalized_price) + (fit_weight × resource_fit)
+HTTP Request
+  |
+  v
+FastAPI Router (app/api/recommendations.py)
+  |
+  v
+RecommendationService.get_recommendations()           # Orchestrator
+  |
+  |-- fetch_candidates(db, req)                        # candidate_fetcher.py
+  |     Builds SQL query with 15+ filter conditions
+  |     Returns list[Candidate] dataclass instances
+  |
+  |-- enrich_and_filter_sustainability(db, candidates)  # candidate_fetcher.py
+  |     Fetches real-time carbon intensity via sustainability_service.py
+  |     Filters by min_renewable_pct / max_carbon_intensity
+  |
+  |-- compute_tco(db, candidates, req)                 # tco.py
+  |     Fetches egress, storage, public IP, OS license rates
+  |     Computes total hourly cost per candidate
+  |
+  |-- _score_candidates(candidates, ...)               # recommendation_service.py + scoring.py
+  |     Applies scoring functions (reliability, performance, spot, sustainability)
+  |     Combines with configurable weights
+  |
+  v
+JSON Response: ranked list of RecommendationItem objects
 ```
 
-| Component | Formula | Range |
-|-----------|---------|-------|
-| `normalized_price` | `(max_price - candidate_price) / price_range` | 0-1 (cheaper = higher) |
-| `resource_fit` | `min(1, requested_vcpu/actual_vcpu) × min(1, requested_ram/actual_ram)` | 0-1 (closer match = higher) |
+---
 
-Default weights: `price_weight=0.5`, `fit_weight=0.5`. Clients can override these per request.
+## Connector Types
 
-#### Multi-Criteria Mode
+Connectors live in `connectors/` and fall into three categories:
 
-Activated when `cost_weight`, `performance_weight`, or `reliability_weight` are provided:
+### 1. Public API (no authentication required)
 
-```
-score = (cost_weight × cost_score) + (perf_weight × perf_score) + (rel_weight × rel_score)
-```
+| Provider | File | Data Source |
+|----------|------|-------------|
+| Azure | `connectors/azure.py` | Azure Retail Prices REST API |
+| AWS | `connectors/aws.py` | Bulk JSON pricing files |
+| OVH | `connectors/ovh.py` | OVH public catalog API |
+| Scaleway | `connectors/scaleway.py` | Scaleway public catalog API |
 
-| Component | How it's computed |
-|-----------|-------------------|
-| Cost score | Same as `normalized_price` |
-| Performance score | `0.6 × vcpu_score + 0.4 × ram_score` (+5% boost for C-series families) |
-| Reliability score | Based on provider type: hyperscaler=0.95, EU=0.85, regional=0.75 |
+### 2. Authenticated API
 
-Default weights: `cost=0.4`, `performance=0.3`, `reliability=0.3`. Weights are normalized to sum to 1.0.
+| Provider | File | Auth Method |
+|----------|------|-------------|
+| Hetzner | `connectors/hetzner.py` | API token |
+| DigitalOcean | `connectors/digitalocean.py` | API token |
+| UpCloud | `connectors/upcloud.py` | Username + password |
+| Seeweb | `connectors/seeweb.py` | API token |
+| GCP | `connectors/gcp.py` | Service account JSON |
+| IBM Cloud | `connectors/ibm_cloud.py` | API key |
 
-### Score Adjustments
+### 3. Config-based (BaseConfigConnector + YAML)
 
-After the base score is computed, several adjustments are applied:
+These providers use `connectors/_config_connector.py` which reads instance definitions from YAML configuration files via `connectors/_config_loader.py`. No live API call is needed -- pricing is maintained in config.
 
-| Adjustment | Condition | Effect |
-|------------|-----------|--------|
-| **Preferred providers** | Provider slug in `preferred_providers` list | `score × 1.2` |
-| **USD-only penalty** | Price currency is not EUR | `score × 0.95` |
-| **Spot availability** | `purchase_model=spot` | Bonus based on instance size and provider type |
-| **Interruption risk** | `purchase_model=spot` | `score × (1.0 - risk × 0.3)` penalty |
+| Provider | File |
+|----------|------|
+| Contabo | `connectors/contabo.py` |
+| Gcore | `connectors/gcore.py` |
+| Cherry Servers | `connectors/cherry_servers.py` |
+| Clouding | `connectors/clouding.py` |
+| Exoscale | `connectors/exoscale.py` |
+| Aruba Cloud | `connectors/aruba.py` |
 
-### TCO (Total Cost of Ownership)
+### Verification
 
-When cost parameters are provided, the engine computes total cost of ownership and uses it for scoring and filtering. Optional parameters include:
+Each connector that supports verification has a corresponding `*_verify.py` module (e.g., `connectors/aws_verify.py`, `connectors/hetzner_verify.py`). These compare ingested data in the database against the live provider API to detect drift. The shared infrastructure lives in `connectors/_verify_base.py`.
 
-- `data_source_provider`, `data_source_region`: Where data/dependencies live (same provider+region = zero egress)
-- `estimated_egress_gb_per_hour`: Egress from new instance to data source
-- `min_storage_gb`, `storage_type`: Block storage (ssd, hdd, balanced)
-- `include_public_ip`: Whether instance needs a public IP
-- `os_type`: Linux (default, no surcharge), windows, or rhel
-- `estimated_cross_az_gb_per_hour`: Same-region cross-AZ traffic
-- `max_tco_eur_per_hour`: Filter candidates by `tco <= max`
+---
 
-Formula: `tco = instance_price + egress_cost + storage_cost + public_ip_cost + os_license_cost + cross_az_cost`
+## Secrets Management
 
-The `explain` block includes `tco_eur_per_hour`, `egress_cost_eur_per_hour`, `storage_cost_eur_per_hour`, `public_ip_cost_eur_per_hour`, `os_license_cost_eur_per_hour`, and `cross_az_cost_eur_per_hour` when TCO is computed.
+Defined in `app/core/config.py` using Pydantic `BaseSettings`:
 
-### Response
+```python
+_SECRETS_DIR = os.environ.get("SECRETS_DIR", "/run/secrets/cloudbroker")
 
-Each recommendation includes an `explain` block with all scoring components, making the ranking transparent:
-
-```json
-{
-  "instance_type_name": "cx23",
-  "provider_slug": "hetzner",
-  "region_slug": "fsn1",
-  "score": 0.9898,
-  "explain": {
-    "resource_fit": 1.0,
-    "normalized_price": 0.9797,
-    "price_weight": 0.5,
-    "fit_weight": 0.5,
-    "price_eur_per_hour": 0.0048,
-    "region_is_eu": true,
-    "tco_eur_per_hour": null,
-    "egress_cost_eur_per_hour": null,
-    "storage_cost_eur_per_hour": null,
-    "public_ip_cost_eur_per_hour": null,
-    "os_license_cost_eur_per_hour": null,
-    "cross_az_cost_eur_per_hour": null
-  }
-}
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        secrets_dir=_SECRETS_DIR if Path(_SECRETS_DIR).is_dir() else None,
+    )
 ```
 
-When TCO params are provided, `tco_eur_per_hour` and the cost components are populated.
+**Priority order** (highest to lowest):
+1. Environment variables
+2. Secret files at `SECRETS_DIR` (default: `/run/secrets/cloudbroker`)
+3. `.env` file
+4. Defaults in the Settings class
 
-## Ingestion Pipeline
+**Kubernetes deployment**: Mount a Kubernetes `Secret` as a volume at the `SECRETS_DIR` path. Each key in the Secret becomes a file that Pydantic reads automatically (e.g., `/run/secrets/cloudbroker/hetzner_api_token`).
 
-Data flows from provider APIs into the database through a CLI → connector → ingestion service chain.
+**Local development**: A `.env` file in the project root works unchanged. No secrets directory is needed.
+
+---
+
+## Database Schema
+
+PostgreSQL with async access via `asyncpg`. Schema managed by Alembic (8 migration versions in `migrations/versions/`).
+
+### Core Tables
+
+| Table | Model File | Purpose |
+|-------|-----------|---------|
+| `providers` | `app/models/provider.py` | Cloud provider registry with `ProviderType` enum (HYPERSCALER, EU, REGIONAL) |
+| `regions` | `app/models/region.py` | Provider regions with country_code, is_eu flag, latitude/longitude |
+| `instance_types` | `app/models/instance_type.py` | VM specs: vcpu, ram_gb, family, arch, cpu_type, gpu_count, gpu_model, is_current_gen |
+| `prices` | `app/models/price.py` | Time-series pricing with `PurchaseModel` enum (on_demand, spot, reserved), currency, EUR equivalent |
+
+### Rate Tables (TCO components)
+
+| Table | Model File | Purpose |
+|-------|-----------|---------|
+| `fx_rates` | `app/models/fx_rate.py` | Currency exchange rates for EUR conversion |
+| `egress_rates` | `app/models/egress_rate.py` | Network egress pricing (per GB, cross-region) |
+| `storage_rates` | `app/models/storage_rate.py` | Block storage pricing (per GB/month by tier) |
+| `public_ip_rates` | `app/models/public_ip_rate.py` | Public IPv4 address pricing (per hour) |
+| `os_license_rates` | `app/models/os_license_rate.py` | OS license surcharges (per vCPU/hour, e.g., Windows, RHEL) |
+
+### Key Relationships
+
+- `Provider` 1:N `Region`
+- `Provider` 1:N `InstanceType`
+- `InstanceType` + `Region` -> `Price` (composite: instance_type_id, region_id, purchase_model, timestamp)
+- Rate tables are keyed by provider slug (and optionally region slug)
+
+---
+
+## Normalization
+
+All connectors normalize instance metadata to a common schema before ingestion.
+
+### Family
+
+Instances are classified into one of:
+- `general-purpose`
+- `compute-optimized`
+- `memory-optimized`
+- `storage-optimized`
+- `gpu`
 
 ### Architecture
 
-```
-make ingest-hetzner
-        │
-        v
-apps/ingestor/cli.py          (CLI entry point, Click)
-        │
-        ├── ensure_provider()          (upsert provider row)
-        │
-        v
-connectors/hetzner.py         (provider-specific API client)
-        │
-        ├── fetch locations       → ensure_region() per location
-        ├── fetch server_types    → ensure_instance_type() per type
-        └── fetch prices          → to_eur() + append_price() per price
-                                           │
-                                           v
-                                 app/services/ingestion.py  (upsert logic)
-```
+- `x86_64` (default for most providers)
+- `arm64` (detected per provider, e.g., AWS Graviton, Azure Ampere, GCP Tau T2A)
 
-### CLI
+### CPU Type
+
+- `shared` -- burstable / shared-core instances
+- `dedicated` -- dedicated vCPU instances
+
+### GPU Detection
+
+Lookup tables map provider-specific instance families or SKU patterns to GPU metadata:
+- **AWS**: 17 GPU instance families mapped to GPU model and count (e.g., p5 -> NVIDIA H100, g5 -> NVIDIA A10G)
+- **Azure**: 17 GPU SKU patterns mapped similarly (e.g., NC series -> NVIDIA T4/A100/H100)
+
+### Current Generation
+
+The `is_current_gen` flag is set by each connector to distinguish current-generation instances from legacy/deprecated ones. This allows the recommendation engine to prefer modern hardware.
+
+---
+
+## Recommendation Scoring
+
+Implemented across `app/services/recommendation_service.py` and `app/services/scoring.py`.
+
+### Scoring Functions (scoring.py)
+
+Six standalone scoring functions, each returning a float in [0, 1]:
+
+1. **`compute_reliability_score`** -- Based on `ProviderType`: HYPERSCALER=0.95, EU=0.85, REGIONAL=0.75
+2. **`compute_performance_score`** -- Normalized vCPU (60%) + RAM (40%) relative to candidate set, with compute-family boost
+3. **`compute_spot_availability_score`** -- Heuristic combining instance size, price position, and provider type
+4. **`compute_interruption_risk_score`** -- Inverse of availability: smaller/cheaper instances = higher risk
+5. **`compute_sustainability_score`** -- Carbon intensity (60% weight) + renewable energy percentage (40% weight), both normalized against candidate set. Returns None when no data is available
+6. **USD_ONLY_PENALTY** -- 0.95 multiplier when only USD pricing exists (no native EUR)
+
+### Scoring Modes
+
+**Legacy mode** (default):
+- `price_weight` (default 0.5) + `fit_weight` (default 0.5)
+- Activated when the caller does not provide multi-criteria weights
+
+**Multi-criteria mode**:
+- `cost_weight` (default 0.4) + `performance_weight` (default 0.3) + `reliability_weight` (default 0.3)
+- Activated when caller provides any of `cost_weight`, `performance_weight`, or `reliability_weight`
+- Weights are normalized to sum to 1.0
+
+**Sustainability boost**: When sustainability data is available, a bonus of up to `sustainability_boost_max` (default 0.15) is added to the final score.
+
+### TCO (Total Cost of Ownership)
+
+Implemented in `app/services/tco.py`. Computes five additional cost components beyond the base instance price:
+
+1. **Egress cost** -- Based on data source location: same region = free, cross-region = cross_region rate, cross-provider = egress rate
+2. **Storage cost** -- Converts monthly GB rate to hourly
+3. **Public IP cost** -- Hourly rate for public IPv4
+4. **OS license cost** -- Per-vCPU-hour surcharge (Windows, RHEL, etc.)
+5. **Cross-AZ transfer** -- Intra-region transfer costs
+
+The TCO result is a tuple: `(total, egress, storage, public_ip, os_license, cross_az)`.
+
+---
+
+## API Endpoints
+
+All endpoints are mounted under the FastAPI application. API key authentication is enforced via `app/core/security.py`.
+
+| Method | Path | Router File | Description |
+|--------|------|-------------|-------------|
+| POST | `/api/recommendations` | `app/api/recommendations.py` | Ranked instance recommendations by specs, region, and price constraints |
+| GET | `/api/providers` | `app/api/providers.py` | List all ingested providers |
+| GET | `/api/regions` | `app/api/regions.py` | List regions with optional provider filter, sustainability data |
+| GET | `/api/instance-types` | `app/api/instance_types.py` | List instance types with pagination and filters |
+| GET | `/api/prices` | `app/api/prices.py` | Query current prices with filters |
+| GET | `/api/price-analytics/changes` | `app/api/price_analytics.py` | Detect recent price changes |
+| GET | `/api/price-analytics/trends` | `app/api/price_analytics.py` | Analyze price trends over time |
+| GET | `/health` | `app/api/health.py` | Health check (database connectivity) |
+| GET | `/api/metrics` | `app/api/metrics.py` | Application metrics |
+
+### Pagination
+
+List endpoints use `app/api/_pagination.py` which provides a `PaginatedQuery` builder supporting `limit` and `offset` query parameters.
+
+---
+
+## Deployment
+
+### Local Development
 
 ```bash
-python -m apps.ingestor ingest --provider <name> [--only-eu] [--quick] [--region <slug>] \
-  [--egress] [--storage] [--public-ip] [--os-license] [--all-costs] [--costs-only] [--egress-only]
+docker-compose up -d          # PostgreSQL
+cp .env.example .env          # Configure credentials
+python -m apps.ingestor ingest --provider aws   # Ingest data
+uvicorn app.main:app --reload                   # Start API
 ```
 
-Supported providers: `gcp`, `hetzner`, `aws`, `azure`, `digitalocean`, `scaleway`, `ovh`, `all`.
+### Kubernetes (Helm)
 
-Cost flags: `--egress` (with instance ingest), `--storage`, `--public-ip`, `--os-license`, `--all-costs`. Use `--costs-only` to skip instance/price ingestion and only ingest cost rates; use `--egress-only` to ingest only egress rates for all providers.
+The Helm chart in `helm/cloudbroker/` deploys:
+- FastAPI application (Deployment + Service + Ingress)
+- Alembic migrations (Job)
+- Ingestion CronJobs (one per provider)
+- Kubernetes Secrets mounted at `/run/secrets/cloudbroker`
 
-### Idempotency
+### Makefile
 
-All write operations are upserts:
-
-| Operation | Key | Behavior |
-|-----------|-----|----------|
-| `ensure_provider` | `slug` | Update if exists, insert if not |
-| `ensure_region` | `(provider_id, slug)` | Update if exists, insert if not |
-| `ensure_instance_type` | `(provider_id, name)` | Update if exists, insert if not |
-| `append_price` | `(instance_type_id, region_id, purchase_model, hour)` | Skip if duplicate in same hour, insert otherwise |
-
-Ingestion is safe to re-run at any time.
-
-### FX Conversion
-
-All prices are stored with their original currency. EUR normalization happens at ingestion time:
-
-1. Connector calls `get_rate_to_eur(currency, date)` to get the conversion rate
-2. If `currency == "EUR"`, rate is `1.0`
-3. Otherwise, looks up `fx_rates` table; falls back to `0.92` for USD→EUR
-4. `price_eur_per_hour = round(price_per_hour × rate, 6)`
-
-### Supported Providers
-
-| Provider | API | Auth Required | Native Currency |
-|----------|-----|---------------|-----------------|
-| Hetzner | Hetzner Cloud API | API token | EUR |
-| GCP | Cloud Billing Catalog | ADC / service account | USD |
-| AWS | Pricing API + EC2 Spot API | IAM credentials | USD |
-| Azure | Retail Prices API | None (public) | USD |
-| DigitalOcean | DO API | API token | USD |
-| Scaleway | Scaleway API | Access key + secret | EUR |
-| OVH | OVH API | App key + secret | EUR |
-
-### Cost Rate Ingestion
-
-In addition to instance and price data, CloudBroker ingests cost rates for TCO calculation:
-
-| Table | Purpose |
-|-------|---------|
-| `egress_rates` | Egress (internet), cross-region, cross-AZ pricing per GB |
-| `storage_rates` | Block storage (ssd, hdd, balanced) per GB-month |
-| `public_ip_rates` | Public IP cost per hour when allocated |
-| `os_license_rates` | OS surcharge (Windows, RHEL) per vCPU-hour |
-
-**API-based** (AWS, Azure, GCP): Storage and egress connectors fetch from provider pricing APIs. **Config-based** (Hetzner, DigitalOcean, Scaleway, OVH): YAML config files in `connectors/` (see [CONFIG_RATE_SOURCES.md](CONFIG_RATE_SOURCES.md) for documentation links).
-
-Run `make ingest-egress` or `make ingest-all-costs` to populate cost rates.
-
-## Price Analytics
-
-Two analytical endpoints operate on the stored price history:
-
-### Change Detection (`GET /api/price-analytics/changes`)
-
-Compares the two most recent prices for each `(instance_type, region, purchase_model)` triple:
-
-- Calculates absolute and percentage change
-- Skips changes below `0.0001 EUR` tolerance
-- Filterable by `purchase_model` and `since_hours`
-
-### Trend Analysis (`GET /api/price-analytics/trends`)
-
-Analyzes price direction over a configurable window (default: 30 days):
-
-- Compares first and latest price in the window
-- Classifies as `increasing`, `decreasing`, or `stable` (threshold: 0.1%)
-- Reports data point count for confidence assessment
-
-## API Surface
-
-All endpoints except `/health` and `/api/metrics` require API key authentication (`X-API-Key` header). In development mode (`APP_ENV=development` without `API_KEY` set), auth is bypassed.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Health check (includes DB connectivity) |
-| `GET` | `/api/providers` | List providers (paginated) |
-| `GET` | `/api/regions` | List regions (filterable by provider) |
-| `GET` | `/api/instance-types` | List instance types (filterable) |
-| `GET` | `/api/prices` | List prices (filterable) |
-| `POST` | `/api/recommendations` | Get ranked instance recommendations |
-| `GET` | `/api/price-analytics/changes` | Detect price changes |
-| `GET` | `/api/price-analytics/trends` | Analyze price trends |
-| `GET` | `/api/metrics` | Prometheus metrics |
-
-## Integration with Cloudburst
-
-Cloudburst Autoscaler's `internal/cloudbroker/client.go` calls `POST /api/recommendations` with:
-
-```json
-{
-  "min_vcpu": 2,
-  "min_ram_gb": 4,
-  "arch": "x86_64",
-  "region_constraint": "EU",
-  "max_price_eur_per_hour": 0.15,
-  "allowed_providers": ["gcp", "scaleway"]
-}
-```
-
-CloudBroker returns ranked results. Cloudburst picks the top recommendation and uses the `provider_slug`, `region_slug`, and `instance_type_name` to provision a VM via the appropriate cloud provider.
-
-The `allowed_providers` field is critical -- it maps directly to the NodePool's `spec.requirements.allowedProviders`, ensuring Cloudburst only provisions VMs from providers it has credentials and NodeClasses configured for.
-
-## Technology Stack
-
-| Layer | Technology |
-|-------|-----------|
-| API framework | FastAPI |
-| ORM | SQLAlchemy 2.x (async via asyncpg) |
-| Database | PostgreSQL 16 |
-| Migrations | Alembic |
-| Validation | Pydantic v2 |
-| Rate limiting | SlowAPI |
-| Metrics | prometheus-client |
-| Logging | structlog |
-| Containerization | Docker + docker-compose |
-| CI | GitHub Actions (lint, test, Docker build + push to GHCR) |
+The `Makefile` provides shortcuts for all common operations:
+- `make ingest-<provider>` -- Run ingestion for a specific provider
+- `make ingest-all` -- Run all provider ingestions
+- `make verify-<provider>` -- Verify ingested data against live API
+- `make test` -- Run test suite

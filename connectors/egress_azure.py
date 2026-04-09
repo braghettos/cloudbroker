@@ -5,9 +5,7 @@ from __future__ import annotations
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_egress_rate
 
 logger = get_logger(__name__)
 
@@ -107,24 +105,7 @@ async def fetch_egress_rates_azure() -> tuple[float, float, float | None]:
 
 async def ingest_egress_azure(db: AsyncSession) -> None:
     """Ingest Azure egress rates and upsert into egress_rates."""
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    egress_usd, free_gb, cross_usd = await fetch_egress_rates_azure()
+    from connectors._egress_helper import ingest_egress_from_usd
 
-    egress_eur = to_eur(egress_usd, rate_usd_eur)
-    cross_eur = to_eur(cross_usd, rate_usd_eur) if cross_usd is not None else None
-    # Cross-AZ (same region): Azure typically ~0.01 USD/GB
-    cross_az_usd = 0.01
-    cross_az_eur = to_eur(cross_az_usd, rate_usd_eur)
-    await ensure_egress_rate(
-        db,
-        provider_slug="azure",
-        egress_eur_per_gb=round(egress_eur, 6),
-        free_tier_gb_per_month=free_gb,
-        cross_region_eur_per_gb=round(cross_eur, 6) if cross_eur else None,
-        cross_az_eur_per_gb=round(cross_az_eur, 6),
-    )
-    logger.info(
-        "Ingested Azure egress rate",
-        egress_eur_per_gb=round(egress_eur, 4),
-        free_tier_gb_per_month=free_gb,
-    )
+    egress_usd, free_gb, cross_usd = await fetch_egress_rates_azure()
+    await ingest_egress_from_usd(db, "azure", egress_usd, free_gb, cross_usd)

@@ -1,0 +1,129 @@
+# CloudBroker Helm Chart - Default Values
+
+image:
+  repository: ghcr.io/braghettos/cloudbroker
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# -- Application configuration (non-secret, exposed as env vars via ConfigMap)
+config:
+  appEnv: production
+  debug: "false"
+  host: "0.0.0.0"
+  port: "8000"
+  corsOrigins: ""
+  rateLimitPerMinute: "100"
+
+# -- Secret mount configuration
+# CloudBroker reads secrets from files at this path via Pydantic secrets_dir.
+# In Kubernetes, mount a Secret as a volume at this path.
+# Each key in the Secret becomes a file (e.g., /run/secrets/cloudbroker/database_url).
+secretsDir: /run/secrets/cloudbroker
+
+# -- Reference to an existing Kubernetes Secret to mount as files.
+# Create this secret via external-secrets, sealed-secrets, Bitwarden Operator, etc.
+# Required keys: database_url, database_url_sync
+# Optional keys: api_key
+existingSecret: ""
+
+# -- Inline secrets (for development/testing only -- use existingSecret in production)
+# Each key becomes a file at {secretsDir}/{key}.
+secrets: {}
+  # database_url: "postgresql+asyncpg://postgres:postgres@cloudbroker-db-rw:5432/cloudbroker"
+  # database_url_sync: "postgresql://postgres:postgres@cloudbroker-db-rw:5432/cloudbroker"
+  # api_key: ""
+
+# -- Ingestion CronJob
+ingestor:
+  enabled: true
+  schedule: "0 4 * * *"  # Daily at 04:00 UTC
+  command:
+    - python
+    - -m
+    - apps.ingestor
+    - ingest
+    - --provider
+    - all
+    - --all-costs
+  # -- Separate secret for provider API keys (ingestion credentials)
+  # Required keys depend on which providers you want to ingest.
+  # See examples/bitwarden-external-secrets.yaml for full list.
+  existingSecret: ""
+  secrets: {}
+    # hetzner_api_token: ""
+    # digitalocean_api_token: ""
+    # upcloud_api_token: ""
+    # seeweb_api_token: ""
+    # aws_access_key_id: ""
+    # aws_secret_access_key: ""
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# -- Init container: run Alembic migrations before API starts
+migrations:
+  enabled: true
+
+# -- Service
+service:
+  type: ClusterIP
+  port: 8000
+
+# -- Ingress
+ingress:
+  enabled: false
+  className: nginx
+  host: cloudbroker.example.com
+  annotations: {}
+  tls: []
+  #  - secretName: cloudbroker-tls
+  #    hosts:
+  #      - cloudbroker.example.com
+
+# -- HPA
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# -- Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+# -- Resources for API pods
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# -- Service Account
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# -- Pod annotations (e.g., for Prometheus scraping)
+podAnnotations: {}
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity
+affinity: {}

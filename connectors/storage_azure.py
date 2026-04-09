@@ -5,9 +5,7 @@ from __future__ import annotations
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_storage_rate
 
 logger = get_logger(__name__)
 
@@ -73,19 +71,11 @@ def _extract_disk_rates(items: list[dict]) -> list[tuple[str, float]]:
 
 async def ingest_storage_azure(db: AsyncSession) -> None:
     """Ingest Azure storage rates."""
+    from connectors._storage_helper import ingest_storage_from_usd
+
     items = await _fetch_azure_disk_items()
     rates = _extract_disk_rates(items)
     if not rates:
         logger.warning("Azure storage: no disk items found, using fallback")
         rates = [("ssd", 0.105), ("hdd", 0.045), ("balanced", 0.068)]
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    for storage_type, usd_per_gb_month in rates:
-        eur = to_eur(usd_per_gb_month, rate_usd_eur)
-        await ensure_storage_rate(
-            db,
-            provider_slug="azure",
-            storage_type=storage_type,
-            eur_per_gb_month=round(eur, 6),
-            region_slug="westeurope",
-        )
-    logger.info("Ingested Azure storage rates", count=len(rates))
+    await ingest_storage_from_usd(db, "azure", rates, region_slug="westeurope")

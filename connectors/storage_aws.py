@@ -8,26 +8,19 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_storage_rate
 
 logger = get_logger(__name__)
 
 _REP_REGION = "EU (Ireland)"  # eu-west-1
 
 
-def _get_pricing_client():
-    try:
-        import boto3
-    except ImportError:
-        raise RuntimeError("boto3 required for AWS storage ingestion")
-    return boto3.client("pricing", region_name="us-east-1")
+from connectors._cloud_clients import get_aws_pricing_client
 
 
 def _fetch_ebs_products_sync() -> list[dict]:
     """Fetch EBS storage products from GetProducts."""
-    client = _get_pricing_client()
+    client = get_aws_pricing_client()
     products: list[dict] = []
     next_token = None
     filters = [
@@ -94,15 +87,7 @@ def _fetch_storage_rates_aws() -> list[tuple[str, float]]:
 
 async def ingest_storage_aws(db: AsyncSession) -> None:
     """Ingest AWS storage rates."""
+    from connectors._storage_helper import ingest_storage_from_usd
+
     rates = await asyncio.to_thread(_fetch_storage_rates_aws)
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    for storage_type, usd_per_gb_month in rates:
-        eur = to_eur(usd_per_gb_month, rate_usd_eur)
-        await ensure_storage_rate(
-            db,
-            provider_slug="aws",
-            storage_type=storage_type,
-            eur_per_gb_month=round(eur, 6),
-            region_slug="eu-west-1",
-        )
-    logger.info("Ingested AWS storage rates", count=len(rates))
+    await ingest_storage_from_usd(db, "aws", rates, region_slug="eu-west-1")

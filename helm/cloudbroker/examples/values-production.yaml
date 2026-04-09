@@ -1,0 +1,63 @@
+# Production values for CloudBroker Helm chart
+#
+# Usage:
+#   helm install cloudbroker ./helm/cloudbroker -f helm/cloudbroker/examples/values-production.yaml
+#
+# Prerequisites:
+#   - ExternalSecret CRDs applied (see bitwarden-external-secrets.yaml)
+#   - Or manually created secrets:
+#     kubectl create secret generic cloudbroker-secrets -n cloudbroker \
+#       --from-literal=database_url='postgresql+asyncpg://...' \
+#       --from-literal=database_url_sync='postgresql://...' \
+#       --from-literal=api_key='your-api-key'
+
+replicaCount: 2
+
+config:
+  appEnv: production
+  debug: "false"
+
+# Reference externally-managed secrets (from Bitwarden, Sealed Secrets, Vault, etc.)
+existingSecret: cloudbroker-secrets
+
+ingestor:
+  enabled: true
+  schedule: "0 4 * * *"
+  existingSecret: cloudbroker-ingest-secrets
+  command:
+    - python
+    - -m
+    - apps.ingestor
+    - ingest
+    - --provider
+    - all
+    - --all-costs
+    - --sustainability
+
+ingress:
+  enabled: true
+  className: nginx
+  host: cloudbroker.yourdomain.com
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "1m"
+  tls:
+    - secretName: cloudbroker-tls
+      hosts:
+        - cloudbroker.yourdomain.com
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from decimal import Decimal
 
 import httpx
@@ -109,9 +108,10 @@ async def ingest(
     only_eu: bool = True,
     purchase_model: str = "on_demand",
 ) -> None:
-    token = os.environ.get("HETZNER_API_TOKEN")
+    from app.core.config import settings
+    token = settings.hetzner_api_token
     if not token:
-        raise RuntimeError("HETZNER_API_TOKEN environment variable is required for Hetzner ingestion")
+        raise RuntimeError("hetzner_api_token is required for Hetzner ingestion (set via env var or secret file)")
 
     purchase = PurchaseModel(purchase_model)
     locations_list = await _fetch_locations(token)
@@ -184,17 +184,27 @@ async def ingest(
             disk_type = "network"
         cpu_type_raw = (st.get("cpu_type") or "").lower()
         cpu_type: str | None = cpu_type_raw if cpu_type_raw in ("shared", "dedicated") else None
+        # Normalize family from Hetzner description
+        raw_family = (st.get("description") or "").lower()
+        if "dedicated" in raw_family:
+            family = "compute-optimized"
+        elif "arm" in raw_family:
+            family = "general-purpose"
+        else:
+            family = "general-purpose"
+
         it = await ensure_instance_type(
             db,
             provider_id=provider.id,
             name=name,
             vcpu=cores,
             ram_gb=float(memory_gb),
-            family=st.get("description") or None,
+            family=family,
             arch=arch,
             disk_gb=disk_gb,
             disk_type=disk_type,
             cpu_type=cpu_type,
+            is_current_gen=True,  # All Hetzner Cloud instances are current generation
         )
         await db.flush()
 

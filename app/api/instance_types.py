@@ -3,9 +3,10 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api._pagination import PaginatedQuery
 from app.api.utils import parse_id_or_slug
 from app.core.database import get_db
 from app.core.security import verify_api_key
@@ -29,34 +30,21 @@ async def list_instance_types(
 ) -> PaginatedResponse[InstanceTypeResponse]:
     """List instance types with filters and pagination."""
     base = select(InstanceType).join(Provider, InstanceType.provider_id == Provider.id)
-    count_base = (
-        select(func.count())
-        .select_from(InstanceType)
-        .join(Provider, InstanceType.provider_id == Provider.id)
-    )
+    pq = PaginatedQuery(base, InstanceType)
+    pq.join_count(Provider, InstanceType.provider_id == Provider.id)
 
     ref = parse_id_or_slug(provider)
     if ref is not None:
         if isinstance(ref, int):
-            base = base.where(InstanceType.provider_id == ref)
-            count_base = count_base.where(InstanceType.provider_id == ref)
+            pq.filter(InstanceType.provider_id == ref)
         else:
-            base = base.where(Provider.slug == ref)
-            count_base = count_base.where(Provider.slug == ref)
+            pq.filter(Provider.slug == ref)
 
-    if min_vcpu is not None:
-        base = base.where(InstanceType.vcpu >= min_vcpu)
-        count_base = count_base.where(InstanceType.vcpu >= min_vcpu)
-    if min_ram_gb is not None:
-        base = base.where(InstanceType.ram_gb >= min_ram_gb)
-        count_base = count_base.where(InstanceType.ram_gb >= min_ram_gb)
-    if arch is not None:
-        base = base.where(InstanceType.arch == arch)
-        count_base = count_base.where(InstanceType.arch == arch)
+    pq.filter_if(min_vcpu, lambda v: InstanceType.vcpu >= v)
+    pq.filter_if(min_ram_gb, lambda v: InstanceType.ram_gb >= v)
+    pq.filter_if(arch, lambda v: InstanceType.arch == v)
 
-    total = (await db.execute(count_base)).scalar_one()
-    stmt = base.order_by(InstanceType.provider_id, InstanceType.name).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    items = result.scalars().unique().all()
-
-    return PaginatedResponse(items=items, total=total, limit=limit, offset=offset)
+    return await pq.execute(
+        db, limit=limit, offset=offset,
+        order_by=(InstanceType.provider_id, InstanceType.name),
+    )

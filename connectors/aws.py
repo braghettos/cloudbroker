@@ -1,19 +1,23 @@
-"""AWS Pricing API connector: EC2 instance types, on-demand and spot pricing.
+"""AWS connector: EC2 instance types, on-demand and spot pricing.
 
-Uses AWS Price List Query API (boto3 pricing client) for on-demand and
-EC2 describe_spot_price_history for spot.
+Pricing source (on-demand): AWS Bulk Pricing JSON (public, no auth required).
+    https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonEC2/current/{region}/index.json
+
+Spot pricing: EC2 describe_spot_price_history (requires boto3 + IAM credentials).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,9 +29,48 @@ from app.services.ingestion import ensure_instance_type, ensure_provider, ensure
 
 logger = get_logger(__name__)
 
-# Pricing API is only in us-east-1 and ap-south-1
-AWS_PRICING_REGION = "us-east-1"
+# Public bulk pricing base URL (no auth required)
+AWS_BULK_PRICING_BASE = "https://pricing.us-east-1.amazonaws.com"
+AWS_OFFER_INDEX_URL = f"{AWS_BULK_PRICING_BASE}/offers/v1.0/aws/AmazonEC2/current"
 SERVICE_CODE_EC2 = "AmazonEC2"
+
+# ---------------------------------------------------------------------------
+# Shared family taxonomy (used by normalization layer)
+# ---------------------------------------------------------------------------
+_AWS_FAMILY_NORMALIZE: dict[str, str] = {
+    "general purpose": "general-purpose",
+    "compute optimized": "compute-optimized",
+    "memory optimized": "memory-optimized",
+    "storage optimized": "storage-optimized",
+    "accelerated computing": "gpu",
+    "machine learning asic": "gpu",
+    "fpga instances": "gpu",
+    "micro instances": "general-purpose",
+}
+
+# Burstable (shared CPU) families
+_AWS_SHARED_CPU_FAMILIES = {"t1", "t2", "t3", "t3a", "t4g"}
+
+# GPU instance type metadata lookup (prefix -> (model, memory_gb per GPU))
+_AWS_GPU_LOOKUP: dict[str, tuple[str, float]] = {
+    "p5.": ("nvidia-h100", 80.0),
+    "p4d.": ("nvidia-a100", 40.0),
+    "p4de.": ("nvidia-a100", 80.0),
+    "p3.": ("nvidia-v100", 16.0),
+    "p3dn.": ("nvidia-v100", 32.0),
+    "g6.": ("nvidia-l4", 24.0),
+    "g6e.": ("nvidia-l40s", 48.0),
+    "g5.": ("nvidia-a10g", 24.0),
+    "g5g.": ("nvidia-t4g", 16.0),
+    "g4dn.": ("nvidia-t4", 16.0),
+    "g4ad.": ("amd-radeon-pro-v520", 8.0),
+    "dl1.": ("habana-gaudi", 32.0),
+    "dl2q.": ("qualcomm-ai100", 16.0),
+    "inf1.": ("aws-inferentia", 8.0),
+    "inf2.": ("aws-inferentia2", 32.0),
+    "trn1.": ("aws-trainium", 32.0),
+    "trn1n.": ("aws-trainium", 32.0),
+}
 
 
 @dataclass
@@ -59,22 +102,16 @@ AWS_REGIONS: list[AwsRegionSpec] = [
     AwsRegionSpec("US West (Oregon)", "us-west-2", "US West (Oregon)", False),
 ]
 
-
-def _get_pricing_client():
-    """Return boto3 Pricing client. Uses us-east-1 (Pricing API availability)."""
-    try:
-        import boto3
-    except ImportError:
-        raise RuntimeError("boto3 is required for AWS ingestion. Install with: pip install boto3")
-    return boto3.client("pricing", region_name=AWS_PRICING_REGION)
+# Map region slug to bulk JSON region code
+_REGION_SLUG_TO_BULK_CODE: dict[str, str] = {r.slug: r.slug for r in AWS_REGIONS}
 
 
 def _get_ec2_client(region: str):
-    """Return boto3 EC2 client for a given region (e.g. for Spot prices later)."""
+    """Return boto3 EC2 client for a given region (for Spot prices)."""
     try:
         import boto3
     except ImportError:
-        raise RuntimeError("boto3 is required for AWS ingestion. Install with: pip install boto3")
+        raise RuntimeError("boto3 is required for AWS spot ingestion. Install with: pip install boto3")
     return boto3.client("ec2", region_name=region)
 
 
@@ -89,11 +126,12 @@ def _parse_memory_gb(memory_str: str) -> float | None:
 
 
 def _parse_vcpu(vcpu_str: str) -> int:
-    """Parse vCPU attribute to int (e.g. '2' -> 2)."""
+    """Parse vCPU attribute to int. Rounds up fractional values (e.g. 0.5 -> 1)."""
     if not vcpu_str:
         return 0
     try:
-        return int(float(vcpu_str))
+        val = float(vcpu_str)
+        return max(1, math.ceil(val)) if val > 0 else 0
     except (ValueError, TypeError):
         return 0
 
@@ -107,16 +145,6 @@ def _parse_gpu_count(gpu_str: str | None) -> int | None:
         return val if val > 0 else None
     except (ValueError, TypeError):
         return None
-
-
-def _parse_gpu_memory_gb(gpu_memory_str: str | None) -> float | None:
-    """Parse AWS gpuMemory string like '16 GiB' or '80 GiB' to float GB."""
-    if not gpu_memory_str or gpu_memory_str.strip().lower() in ("", "na", "n/a", "none"):
-        return None
-    match = re.match(r"^([\d.]+)\s*GiB$", gpu_memory_str.strip(), re.IGNORECASE)
-    if match:
-        return float(match.group(1))
-    return None
 
 
 def _parse_generation(current_generation: str | None) -> bool | None:
@@ -134,11 +162,7 @@ def _normalize_network_performance(raw: str | None) -> str | None:
 
 
 def _map_aws_physical_processor_to_arch(physical_processor: str | None) -> str | None:
-    """Map AWS physicalProcessor attribute to our arch (x86_64 or arm64) for recommendations.
-
-    Recommendation API filters by arch in ('x86_64', 'arm64'). AWS returns values like
-    'Intel Xeon Platinum 8175', 'AWS Graviton4 Processor', 'AMD EPYC 7R32'.
-    """
+    """Map AWS physicalProcessor attribute to our arch (x86_64 or arm64)."""
     if not physical_processor or not physical_processor.strip():
         return None
     raw = physical_processor.strip().lower()
@@ -150,14 +174,45 @@ def _map_aws_physical_processor_to_arch(physical_processor: str | None) -> str |
     return "x86_64"
 
 
+def _normalize_family(raw_family: str | None) -> str | None:
+    """Normalize AWS instanceFamily to common taxonomy."""
+    if not raw_family:
+        return None
+    normalized = _AWS_FAMILY_NORMALIZE.get(raw_family.strip().lower())
+    if normalized:
+        return normalized
+    # Truncate if needed
+    family = raw_family.strip()
+    return family[:64] if len(family) > 64 else family
+
+
+def _infer_cpu_type(instance_name: str, family_raw: str | None) -> str | None:
+    """Infer cpu_type from instance name prefix. Burstable T-series = shared."""
+    prefix = instance_name.split(".")[0].lower() if "." in instance_name else ""
+    if prefix in _AWS_SHARED_CPU_FAMILIES:
+        return "shared"
+    # All other EC2 instances with Shared tenancy filter are dedicated vCPU
+    return "dedicated"
+
+
+def _enrich_gpu(instance_name: str, gpu_count_raw: int | None) -> tuple[int | None, str | None, float | None]:
+    """Enrich GPU metadata using lookup table. Returns (gpu_count, gpu_model, gpu_memory_gb)."""
+    name_lower = instance_name.lower()
+    for prefix, (model, mem_per_gpu) in _AWS_GPU_LOOKUP.items():
+        if name_lower.startswith(prefix):
+            count = gpu_count_raw or 1
+            return count, model, mem_per_gpu * count
+    # Fallback to raw count if no lookup match
+    return gpu_count_raw, None, None
+
+
 def _extract_ondemand_price_usd(product: dict) -> float | None:
-    """Extract hourly USD price from GetProducts item. Returns None if not OnDemand or no price."""
+    """Extract hourly USD price from bulk pricing item. Returns None if not OnDemand or no price."""
     try:
         terms = product.get("terms") or {}
         on_demand = terms.get("OnDemand")
         if not on_demand:
             return None
-        # First (and usually only) SKU key
         for sku_data in on_demand.values():
             dims = sku_data.get("priceDimensions") or {}
             for dim in dims.values():
@@ -174,54 +229,69 @@ def _extract_ondemand_price_usd(product: dict) -> float | None:
     return None
 
 
-def _fetch_ec2_ondemand_for_location(
-    pricing_client: Any,
-    location_name: str,
-    rate_limit_delay_sec: float = 0.25,
-) -> list[tuple[dict[str, str], float]]:
-    """Call GetProducts for one location; return list of (attributes dict, USD per hour). Sync."""
-    filters = [
-        {"Type": "TERM_MATCH", "Field": "location", "Value": location_name},
-        {"Type": "TERM_MATCH", "Field": "termType", "Value": "OnDemand"},
-        {"Type": "TERM_MATCH", "Field": "operatingSystem", "Value": "Linux"},
-        {"Type": "TERM_MATCH", "Field": "tenancy", "Value": "Shared"},
-        {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "Compute Instance"},
-        # Exclude pre-installed software (SQL Web, SQL Std, etc.) — base Linux price only
-        {"Type": "TERM_MATCH", "Field": "preInstalledSw", "Value": "NA"},
-        # Exclude capacity reservation SKUs; only regular on-demand usage
-        {"Type": "TERM_MATCH", "Field": "capacitystatus", "Value": "Used"},
-    ]
+def _fetch_bulk_pricing_for_region(region_slug: str) -> list[tuple[dict[str, str], float]]:
+    """Fetch on-demand pricing from public bulk JSON for one region. No auth required. Sync."""
+    url = f"{AWS_OFFER_INDEX_URL}/{region_slug}/index.json"
     results: list[tuple[dict[str, str], float]] = []
-    next_token = None
-    while True:
-        kwargs = {
-            "ServiceCode": SERVICE_CODE_EC2,
-            "Filters": filters,
-            "MaxResults": 100,
-        }
-        if next_token:
-            kwargs["NextToken"] = next_token
-        resp = pricing_client.get_products(**kwargs)
-        time.sleep(rate_limit_delay_sec)
-        for item in resp.get("PriceList") or []:
-            try:
-                data = json.loads(item) if isinstance(item, str) else item
-                product = data.get("product") or {}
-                attrs = product.get("attributes") or {}
-                if product.get("productFamily") != "Compute Instance":
-                    continue
-                price_usd = _extract_ondemand_price_usd(data)
-                if price_usd is None or price_usd <= 0:
-                    continue
-                instance_type = (attrs.get("instanceType") or "").strip()
-                if not instance_type:
-                    continue
-                results.append((attrs, price_usd))
-            except (json.JSONDecodeError, TypeError, KeyError):
+
+    try:
+        with httpx.Client(timeout=120.0) as client:
+            r = client.get(url)
+            r.raise_for_status()
+            data = r.json()
+    except Exception as e:
+        logger.error("AWS bulk pricing fetch failed", region=region_slug, error=str(e))
+        return results
+
+    products = data.get("products") or {}
+    terms = data.get("terms") or {}
+    on_demand_terms = terms.get("OnDemand") or {}
+
+    for sku, product in products.items():
+        try:
+            attrs = product.get("attributes") or {}
+            if product.get("productFamily") != "Compute Instance":
                 continue
-        next_token = resp.get("NextToken")
-        if not next_token:
-            break
+            # Only Linux, Shared tenancy, no pre-installed SW, used capacity
+            if (attrs.get("operatingSystem") or "").strip() != "Linux":
+                continue
+            if (attrs.get("tenancy") or "").strip() != "Shared":
+                continue
+            if (attrs.get("preInstalledSw") or "").strip() != "NA":
+                continue
+            if (attrs.get("capacitystatus") or "").strip() != "Used":
+                continue
+
+            instance_type = (attrs.get("instanceType") or "").strip()
+            if not instance_type:
+                continue
+
+            # Extract price from terms
+            sku_terms = on_demand_terms.get(sku)
+            if not sku_terms:
+                continue
+            price_usd = None
+            for term_data in sku_terms.values():
+                dims = term_data.get("priceDimensions") or {}
+                for dim in dims.values():
+                    unit = (dim.get("unit") or "").strip().lower()
+                    if unit != "hrs":
+                        continue
+                    price_per = dim.get("pricePerUnit") or {}
+                    usd = price_per.get("USD")
+                    if usd is not None:
+                        price_usd = float(usd)
+                        break
+                if price_usd is not None:
+                    break
+
+            if price_usd is None or price_usd <= 0:
+                continue
+
+            results.append((attrs, price_usd))
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
+            continue
+
     return results
 
 
@@ -275,7 +345,11 @@ async def ingest(
     purchase_model: str = "on_demand",
     region: str | None = None,
 ) -> None:
-    """Ensure AWS provider and regions; ingest EC2 on-demand instance types and prices."""
+    """Ensure AWS provider and regions; ingest EC2 on-demand instance types and prices.
+
+    On-demand pricing uses the public bulk JSON endpoint (no AWS credentials needed).
+    Spot pricing still requires boto3 + IAM credentials.
+    """
     from app.models.provider import ProviderType
 
     purchase = PurchaseModel(purchase_model)
@@ -338,7 +412,6 @@ async def _run_ondemand_ingest(
     only_eu: bool,
 ) -> None:
     rate_usd_eur = await get_rate_to_eur(db, "USD")
-    pricing_client = _get_pricing_client()
     inserted = 0
     instance_types_seen: set[str] = set()
 
@@ -349,7 +422,12 @@ async def _run_ondemand_ingest(
         loop = asyncio.get_event_loop()
         items = await loop.run_in_executor(
             None,
-            lambda loc=spec.location_name: _fetch_ec2_ondemand_for_location(pricing_client, loc),
+            lambda slug=spec.slug: _fetch_bulk_pricing_for_region(slug),
+        )
+        logger.info(
+            "AWS bulk pricing fetched",
+            region=spec.slug,
+            items=len(items),
         )
         for attrs, price_usd in items:
             name = (attrs.get("instanceType") or "").strip()
@@ -360,14 +438,12 @@ async def _run_ondemand_ingest(
             ram_gb = _parse_memory_gb(memory_str)
             if ram_gb is None or ram_gb <= 0:
                 ram_gb = 0.0
-            family = (attrs.get("instanceFamily") or "").strip() or None
-            if family and len(family) > 64:
-                family = family[:64]
+            family = _normalize_family(attrs.get("instanceFamily"))
             arch = _map_aws_physical_processor_to_arch(attrs.get("physicalProcessor"))
             is_current_gen = _parse_generation(attrs.get("currentGeneration"))
-            gpu_count = _parse_gpu_count(attrs.get("gpu"))
-            gpu_memory_gb = _parse_gpu_memory_gb(attrs.get("gpuMemory"))
-            gpu_model = (attrs.get("elasticGpuType") or "").strip() or None
+            gpu_count_raw = _parse_gpu_count(attrs.get("gpu"))
+            gpu_count, gpu_model, gpu_memory_gb = _enrich_gpu(name, gpu_count_raw)
+            cpu_type = _infer_cpu_type(name, attrs.get("instanceFamily"))
             network_performance = _normalize_network_performance(attrs.get("networkPerformance"))
             metadata = (
                 json.dumps(
@@ -394,6 +470,7 @@ async def _run_ondemand_ingest(
                 gpu_count=gpu_count,
                 gpu_model=gpu_model,
                 gpu_memory_gb=gpu_memory_gb,
+                cpu_type=cpu_type,
                 network_performance=network_performance,
                 metadata_json=metadata,
             )

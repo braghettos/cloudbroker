@@ -50,6 +50,48 @@ _AZURE_VM_GEN_RE = re.compile(r"_v(\d+)$", re.IGNORECASE)
 # GPU series: N-series VMs have GPUs
 _AZURE_GPU_SERIES = {"NC", "ND", "NV", "NVv", "NCv", "NDv", "NVas", "NCas", "NDas"}
 
+# ARM series: Dpsv5, Epsv5, Dpdsv5, Dpdsv6, etc.
+_AZURE_ARM_PATTERNS = re.compile(r"Standard_[DE]p[a-z]*[sv]\d+", re.IGNORECASE)
+
+# Burstable (shared CPU) series
+_AZURE_BURSTABLE_SERIES = {"B", "Bs", "Bms"}
+
+# Family normalization to common taxonomy
+_AZURE_FAMILY_NORMALIZE: dict[str, str] = {
+    "A": "general-purpose",
+    "B": "general-purpose",
+    "D": "general-purpose",
+    "E": "memory-optimized",
+    "F": "compute-optimized",
+    "G": "memory-optimized",
+    "H": "compute-optimized",
+    "L": "storage-optimized",
+    "M": "memory-optimized",
+    "N": "gpu",
+}
+
+# GPU model lookup by Azure series
+_AZURE_GPU_LOOKUP: dict[str, tuple[str, float]] = {
+    "NC6s_v3": ("nvidia-v100", 16.0),
+    "NC12s_v3": ("nvidia-v100", 32.0),
+    "NC24s_v3": ("nvidia-v100", 64.0),
+    "NC4as_T4_v3": ("nvidia-t4", 16.0),
+    "NC8as_T4_v3": ("nvidia-t4", 16.0),
+    "NC16as_T4_v3": ("nvidia-t4", 16.0),
+    "NC64as_T4_v3": ("nvidia-t4", 64.0),
+    "NC24ads_A100_v4": ("nvidia-a100", 80.0),
+    "NC48ads_A100_v4": ("nvidia-a100", 160.0),
+    "NC96ads_A100_v4": ("nvidia-a100", 320.0),
+    "ND96asr_v4": ("nvidia-a100", 320.0),
+    "ND96amsr_A100_v4": ("nvidia-a100", 320.0),
+    "NV6": ("nvidia-m60", 8.0),
+    "NV12": ("nvidia-m60", 16.0),
+    "NV24": ("nvidia-m60", 24.0),
+    "NV12s_v3": ("nvidia-m60", 8.0),
+    "NV24s_v3": ("nvidia-m60", 16.0),
+    "NV48s_v3": ("nvidia-m60", 24.0),
+}
+
 
 @dataclass
 class AzureRegionSpec:
@@ -159,8 +201,9 @@ async def _load_sku_specs() -> dict[str, AzureSkuSpec]:
     Returns empty dict if credentials are not available, causing the connector to fall
     back to heuristic spec derivation.
     """
-    subscription_id = os.environ.get("AZURE_SUBSCRIPTION_ID", "")
-    access_token = os.environ.get("AZURE_ACCESS_TOKEN", "")
+    from app.core.config import settings as app_settings
+    subscription_id = app_settings.azure_subscription_id or ""
+    access_token = app_settings.azure_access_token or ""
 
     if not subscription_id:
         logger.info("Azure Resource SKUs API skipped: AZURE_SUBSCRIPTION_ID not set; using heuristic specs")
@@ -302,13 +345,56 @@ def _parse_effective_date(item: dict) -> datetime | None:
 
 
 def _azure_family_from_product(product_name: str) -> str | None:
-    """Derive family from Azure product name (e.g. Standard_D4s_v3 -> D)."""
+    """Derive normalized family from Azure product name (e.g. Standard_D4s_v3 -> general-purpose)."""
     if not product_name or not product_name.upper().startswith("STANDARD_"):
         return None
     parts = product_name.split("_")
     if len(parts) >= 2:
-        return parts[1][:1].upper()
+        letter = parts[1][:1].upper()
+        return _AZURE_FAMILY_NORMALIZE.get(letter, "general-purpose")
     return None
+
+
+def _azure_detect_arch(sku_name: str) -> str:
+    """Detect architecture from Azure SKU name. ARM instances use Dp/Ep prefixes."""
+    if _AZURE_ARM_PATTERNS.match(sku_name):
+        return "arm64"
+    return "x86_64"
+
+
+def _azure_infer_cpu_type(sku_name: str) -> str | None:
+    """Infer cpu_type from Azure SKU name. B-series is burstable/shared."""
+    if not sku_name or not sku_name.upper().startswith("STANDARD_"):
+        return None
+    parts = sku_name.split("_")
+    if len(parts) >= 2:
+        # Extract series letter(s): "B2s" -> "B", "Bs" -> "B", "Bms" -> "B"
+        series_part = parts[1]
+        first_letter = series_part[:1].upper()
+        if first_letter == "B":
+            return "shared"
+    return "dedicated"
+
+
+def _azure_is_current_gen(sku_name: str) -> bool | None:
+    """Heuristic: v4+ and v5+ are current generation."""
+    gen_match = _AZURE_VM_GEN_RE.search(sku_name)
+    if gen_match:
+        gen_num = int(gen_match.group(1))
+        return gen_num >= 4
+    return None
+
+
+def _azure_enrich_gpu(sku_name: str, gpu_count: int | None) -> tuple[int | None, str | None, float | None]:
+    """Enrich GPU model and memory from Azure SKU lookup table."""
+    if not sku_name or not sku_name.upper().startswith("STANDARD_"):
+        return gpu_count, None, None
+    # Strip "Standard_" prefix for lookup
+    bare = sku_name.replace("Standard_", "")
+    if bare in _AZURE_GPU_LOOKUP:
+        model, mem = _AZURE_GPU_LOOKUP[bare]
+        return gpu_count or 1, model, mem
+    return gpu_count, None, None
 
 
 async def ingest(
@@ -434,6 +520,9 @@ async def ingest(
                     if gen_match:
                         generation = f"v{gen_match.group(1)}"
 
+                # Enrich GPU metadata from lookup table
+                gpu_count, gpu_model, gpu_memory_gb = _azure_enrich_gpu(sku, gpu_count)
+
                 it = await ensure_instance_type(
                     db,
                     provider_id=provider.id,
@@ -442,9 +531,12 @@ async def ingest(
                     ram_gb=ram_gb,
                     family=_azure_family_from_product(sku),
                     generation=generation,
-                    arch="x86_64",
+                    arch=_azure_detect_arch(sku),
+                    cpu_type=_azure_infer_cpu_type(sku),
+                    is_current_gen=_azure_is_current_gen(sku),
                     gpu_count=gpu_count,
                     gpu_model=gpu_model,
+                    gpu_memory_gb=gpu_memory_gb,
                 )
                 await db.flush()
                 instance_types_seen.add(sku)

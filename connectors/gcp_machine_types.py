@@ -278,11 +278,12 @@ async def _load_live_machine_types(only_eu: bool) -> list[MachineTypeSpec]:
 
     Raises RuntimeError if credentials or GOOGLE_CLOUD_PROJECT are missing.
     """
-    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GCP_PROJECT_ID") or ""
+    from app.core.config import settings as app_settings
+    project_id = app_settings.google_cloud_project or os.environ.get("GCP_PROJECT_ID") or ""
     if not project_id:
         raise RuntimeError(
-            "GCP Compute Engine API requires GOOGLE_CLOUD_PROJECT environment variable. "
-            "Set it to your GCP project ID."
+            "google_cloud_project is required for GCP Compute Engine API "
+            "(set via env var or secret file)"
         )
 
     eu_zones = [

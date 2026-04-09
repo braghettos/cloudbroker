@@ -188,10 +188,10 @@ async def ingest(
     """Ingest IBM Cloud VPC instance profiles and pricing."""
     from app.core.config import settings
 
-    api_key = settings.ibmcloud_api_key or os.environ.get("IBMCLOUD_API_KEY")
+    api_key = settings.ibmcloud_api_key
     if not api_key:
         raise RuntimeError(
-            "IBMCLOUD_API_KEY environment variable is required for IBM Cloud ingestion"
+            "ibmcloud_api_key is required for IBM Cloud ingestion (set via env var or secret file)"
         )
 
     purchase = PurchaseModel(purchase_model)

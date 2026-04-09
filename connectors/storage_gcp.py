@@ -5,19 +5,12 @@ from __future__ import annotations
 import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.fx import get_rate_to_eur, to_eur
 from app.core.logging import get_logger
-from app.services.ingestion import ensure_storage_rate
 
 logger = get_logger(__name__)
 
 
-def _get_billing_client():
-    try:
-        from google.cloud import billing_v1
-    except ImportError:
-        raise RuntimeError("google-cloud-billing required for GCP storage")
-    return billing_v1.CloudCatalogClient()
+from connectors._cloud_clients import get_gcp_billing_client
 
 
 def _is_persistent_disk_sku(sku) -> bool:
@@ -76,7 +69,7 @@ def _has_eu_region(sku) -> bool:
 
 
 def _fetch_storage_rates_gcp() -> list[tuple[str, float]]:
-    client = _get_billing_client()
+    client = get_gcp_billing_client()
     services = list(client.list_services())
     compute_service = None
     for s in services:
@@ -105,15 +98,7 @@ def _fetch_storage_rates_gcp() -> list[tuple[str, float]]:
 
 async def ingest_storage_gcp(db: AsyncSession) -> None:
     """Ingest GCP storage rates."""
+    from connectors._storage_helper import ingest_storage_from_usd
+
     rates = await asyncio.to_thread(_fetch_storage_rates_gcp)
-    rate_usd_eur = await get_rate_to_eur(db, "USD")
-    for storage_type, usd_per_gb_month in rates:
-        eur = to_eur(usd_per_gb_month, rate_usd_eur)
-        await ensure_storage_rate(
-            db,
-            provider_slug="gcp",
-            storage_type=storage_type,
-            eur_per_gb_month=round(eur, 6),
-            region_slug="europe-west1",
-        )
-    logger.info("Ingested GCP storage rates", count=len(rates))
+    await ingest_storage_from_usd(db, "gcp", rates, region_slug="europe-west1")

@@ -30,7 +30,7 @@ from connectors.gcp import (
     _list_skus,
     _service_regions,
 )
-from connectors.gcp_machine_types import GCP_MACHINE_TYPES, _get_latest_price
+from connectors.gcp_machine_types import _get_latest_price
 
 logger = get_logger(__name__)
 
@@ -243,26 +243,23 @@ async def verify_ingested_prices(
     else:
         results.append(VerificationResult(passed=True, message="Unit prices match API"))
 
-    # 4. Sanity check: e2-highcpu-2 should be in reasonable range
-    e2_highcpu_2 = next((m for m in GCP_MACHINE_TYPES if m.name == "e2-highcpu-2"), None)
-    if e2_highcpu_2:
+    # 4. Sanity check: e2-highcpu-2 should be in reasonable range (query from DB, not static catalog)
+    e2_highcpu_2_it = (
+        (
+            await db.execute(
+                select(InstanceType)
+                .where(InstanceType.provider_id == provider.id)
+                .where(InstanceType.name == "e2-highcpu-2")
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if e2_highcpu_2_it:
         low_prices: list[dict] = []
         for region in regions:
-            machine_it = (
-                (
-                    await db.execute(
-                        select(InstanceType)
-                        .where(InstanceType.provider_id == provider.id)
-                        .where(InstanceType.name == "e2-highcpu-2")
-                        .limit(1)
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if not machine_it:
-                continue
-            price = await _get_latest_price(db, machine_it.id, region.id, purchase)
+            price = await _get_latest_price(db, e2_highcpu_2_it.id, region.id, purchase)
             if not price:
                 continue
             eur = price.price_eur_per_hour or to_eur(price.price_per_hour, rate_usd_eur)
@@ -287,8 +284,7 @@ async def verify_ingested_prices(
             results.append(VerificationResult(passed=True, message="e2-highcpu-2 prices in reasonable range"))
 
     # 5. Cross-check: recompute e2-highcpu-2 from unit prices and compare with stored
-    e2_highcpu_2_spec = next((m for m in GCP_MACHINE_TYPES if m.name == "e2-highcpu-2"), None)
-    if e2_highcpu_2_spec:
+    if e2_highcpu_2_it:
         recompute_mismatches: list[dict] = []
         for region in regions:
             cpu_price = await _get_latest_price(db, cpu_it.id, region.id, purchase)
@@ -297,23 +293,9 @@ async def verify_ingested_prices(
                 continue
             cpu_eur = cpu_price.price_eur_per_hour or to_eur(cpu_price.price_per_hour, rate_usd_eur)
             ram_eur = ram_price.price_eur_per_hour or to_eur(ram_price.price_per_hour, rate_usd_eur)
-            expected_machine_eur = (cpu_eur * e2_highcpu_2_spec.vcpu) + (ram_eur * e2_highcpu_2_spec.ram_gb)
+            expected_machine_eur = (cpu_eur * e2_highcpu_2_it.vcpu) + (ram_eur * e2_highcpu_2_it.ram_gb)
 
-            machine_it = (
-                (
-                    await db.execute(
-                        select(InstanceType)
-                        .where(InstanceType.provider_id == provider.id)
-                        .where(InstanceType.name == "e2-highcpu-2")
-                        .limit(1)
-                    )
-                )
-                .scalars()
-                .first()
-            )
-            if not machine_it:
-                continue
-            stored_price = await _get_latest_price(db, machine_it.id, region.id, purchase)
+            stored_price = await _get_latest_price(db, e2_highcpu_2_it.id, region.id, purchase)
             if not stored_price:
                 continue
             stored_eur = stored_price.price_eur_per_hour or to_eur(stored_price.price_per_hour, rate_usd_eur)

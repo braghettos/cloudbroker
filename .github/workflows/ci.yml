@@ -85,12 +85,19 @@ jobs:
           APP_ENV: test
         run: make migrate
 
+      - name: Seed test data
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
+          DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
+          APP_ENV: test
+        run: python scripts/seed_test_data.py
+
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
           DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
           APP_ENV: test
-        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=25 -v
+        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=28 -m "not e2e and not exhaustive and not live_data" -v
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

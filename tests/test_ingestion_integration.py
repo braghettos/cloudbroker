@@ -9,7 +9,7 @@ They are idempotent — safe to re-run.
 """
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 
 from app.core.database import AsyncSessionLocal
 from app.models import EgressRate, InstanceType, OsLicenseRate, Price, Provider, PublicIpRate, Region, StorageRate

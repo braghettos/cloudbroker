@@ -85,19 +85,41 @@ jobs:
           APP_ENV: test
         run: make migrate
 
-      - name: Seed test data
+      - name: Ingest config-based providers (no auth)
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
           DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
           APP_ENV: test
-        run: python scripts/seed_test_data.py
+        run: |
+          for provider in contabo gcore cherry_servers clouding exoscale aruba; do
+            python -m apps.ingestor ingest --provider $provider 2>&1 | tail -1
+          done
+
+      - name: Ingest public API providers (no auth)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
+          DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
+          APP_ENV: test
+        run: |
+          python -m apps.ingestor ingest --provider azure --quick 2>&1 | tail -1
+          python -m apps.ingestor ingest --provider ovh 2>&1 | tail -1
+          python -m apps.ingestor ingest --provider scaleway 2>&1 | tail -1
+          python -m apps.ingestor ingest --provider aws --quick 2>&1 | tail -1
+
+      - name: Ingest cost components (no auth)
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
+          DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
+          APP_ENV: test
+        run: |
+          python -m apps.ingestor ingest --provider azure --costs-only --all-costs 2>&1 | tail -1
 
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/cloudbroker_test
           DATABASE_URL_SYNC: postgresql://postgres:postgres@localhost:5432/cloudbroker_test
           APP_ENV: test
-        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=28 -m "not e2e and not exhaustive and not live_data" -v
+        run: pytest --cov=app --cov=connectors --cov=apps --cov-report=xml --cov-report=term --cov-fail-under=40 -m "not e2e and not exhaustive and not live_data" -v
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

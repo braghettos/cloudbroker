@@ -48,6 +48,8 @@ def _parse() -> argparse.ArgumentParser:
             "cherry_servers",
             "clouding",
             "ibm_cloud",
+            "vultr",
+            "linode",
             "sustainability",
             "all",
         ],
@@ -148,6 +150,8 @@ PROVIDERS_ALL = [
     "cherry_servers",
     "clouding",
     "ibm_cloud",
+    "vultr",
+    "linode",
 ]
 
 
@@ -182,6 +186,8 @@ async def _ingest_provider_instance(
     from connectors import cherry_servers as cherry_servers_conn
     from connectors import clouding as clouding_conn
     from connectors import ibm_cloud as ibm_cloud_conn
+    from connectors import linode as linode_conn
+    from connectors import vultr as vultr_conn
 
     conn_map = {
         "aruba": aruba_conn,
@@ -200,6 +206,8 @@ async def _ingest_provider_instance(
         "cherry_servers": cherry_servers_conn,
         "clouding": clouding_conn,
         "ibm_cloud": ibm_cloud_conn,
+        "vultr": vultr_conn,
+        "linode": linode_conn,
     }
     conn = conn_map.get(slug)
     if not conn:

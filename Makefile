@@ -164,6 +164,12 @@ ingest-clouding: ## Ingest Clouding.io (config-based, no auth required)
 ingest-ibm-cloud: ## Ingest IBM Cloud VPC (API-based; requires IBMCLOUD_API_KEY)
 	$(PYTHON) -m apps.ingestor ingest --provider ibm_cloud
 
+ingest-vultr: ## Ingest Vultr (public API, no auth)
+	$(PYTHON) -m apps.ingestor ingest --provider vultr
+
+ingest-linode: ## Ingest Linode/Akamai (public API, no auth)
+	$(PYTHON) -m apps.ingestor ingest --provider linode
+
 ingest-sustainability: ## Ingest sustainability data (GCP CSV + Ember static fallback for all regions)
 	$(PYTHON) -m apps.ingestor ingest --provider sustainability
 

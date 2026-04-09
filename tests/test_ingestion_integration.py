@@ -210,6 +210,36 @@ class TestPublicApiIngestion:
         assert stats["instance_types"] > 100
         assert stats["prices"] > 100
 
+    @pytest.mark.asyncio
+    async def test_ingest_vultr(self):
+        """Vultr public API — plans and regions."""
+        from connectors.vultr import ingest
+
+        async with AsyncSessionLocal() as db:
+            await ingest(db, only_eu=True, purchase_model="on_demand")
+            await db.commit()
+
+        stats = await _provider_stats("vultr")
+        assert stats["exists"]
+        assert stats["instance_types"] > 10
+        assert stats["regions"] >= 8
+        assert stats["prices"] > 50
+
+    @pytest.mark.asyncio
+    async def test_ingest_linode(self):
+        """Linode (Akamai) public API — types and regions."""
+        from connectors.linode import ingest
+
+        async with AsyncSessionLocal() as db:
+            await ingest(db, only_eu=True, purchase_model="on_demand")
+            await db.commit()
+
+        stats = await _provider_stats("linode")
+        assert stats["exists"]
+        assert stats["instance_types"] > 10
+        assert stats["regions"] >= 8
+        assert stats["prices"] > 50
+
 
 # ---------------------------------------------------------------------------
 # Cost component ingestion
